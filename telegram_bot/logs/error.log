@@ -1,0 +1,490 @@
+2026-01-26 17:28:56 [ERROR]: Failed to connect to database: Authentication failed against database server at `localhost`, the provided database credentials for `username` are not valid.
+
+Please make sure to provide valid database credentials for the database server at `localhost`.
+PrismaClientInitializationError: Authentication failed against database server at `localhost`, the provided database credentials for `username` are not valid.
+
+Please make sure to provide valid database credentials for the database server at `localhost`.
+    at t (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:112:2488)
+    at async connectDatabase (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/utils/database.js:29:5)
+    at async main (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/index.js:139:5)
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:23 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:23 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:33 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:33 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:41 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:41 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:43 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:43 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:44 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:44 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:46 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:46 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:49 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:49 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:34:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:34:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:34:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:34:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9

@@ -1,0 +1,37 @@
+{
+  "name": "shershina-bot",
+  "version": "1.0.0",
+  "description": "Professional Telegram bot for SherShina tire shop",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "node prisma/seed.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "tire-shop",
+    "shershina"
+  ],
+  "author": "SherShina",
+  "license": "MIT",
+  "dependencies": {
+    "@grammyjs/conversations": "^2.1.1",
+    "@prisma/client": "^5.10.0",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "grammy": "^1.21.1",
+    "pg": "^8.17.2",
+    "winston": "^3.11.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0",
+    "prisma": "^5.10.0"
+  }
+}

@@ -1,0 +1,1034 @@
+2026-01-26 17:28:56 [ERROR]: Failed to connect to database: Authentication failed against database server at `localhost`, the provided database credentials for `username` are not valid.
+
+Please make sure to provide valid database credentials for the database server at `localhost`.
+PrismaClientInitializationError: Authentication failed against database server at `localhost`, the provided database credentials for `username` are not valid.
+
+Please make sure to provide valid database credentials for the database server at `localhost`.
+    at t (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:112:2488)
+    at async connectDatabase (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/utils/database.js:29:5)
+    at async main (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/index.js:139:5)
+2026-01-26 17:33:11 [INFO]: Database connected successfully
+2026-01-26 17:33:11 [INFO]: Starting bot...
+2026-01-26 17:33:12 [INFO]: Bot started as @shershina_bot
+2026-01-26 17:33:13 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:13 [DEBUG]: Duration: 23ms
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:13 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:13 [DEBUG]: Duration: 1ms
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:13 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:13 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:13 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:13 [DEBUG]: Duration: 1ms
+2026-01-26 17:33:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:23 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:23 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:23 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:23 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:33 [DEBUG]: Query: SELECT 1
+2026-01-26 17:33:33 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:33 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:33 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:33 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:33 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:41 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:41 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:41 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:41 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:43 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:43 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:43 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:43 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:44 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:44 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:44 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:44 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:46 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:46 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:46 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:46 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:33:49 [DEBUG]: Query: SELECT 1
+2026-01-26 17:33:49 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:49 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:33:49 [DEBUG]: Duration: 0ms
+2026-01-26 17:33:49 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:33:49 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:34:02 [INFO]: Received SIGINT, shutting down...
+2026-01-26 17:34:02 [INFO]: Database disconnected
+2026-01-26 17:34:12 [INFO]: Database connected successfully
+2026-01-26 17:34:12 [INFO]: Starting bot...
+2026-01-26 17:34:12 [INFO]: Bot started as @shershina_bot
+2026-01-26 17:34:13 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:34:13 [DEBUG]: Duration: 1ms
+2026-01-26 17:34:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:34:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:34:13 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:34:13 [DEBUG]: Duration: 0ms
+2026-01-26 17:34:13 [ERROR]: Prisma Error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+2026-01-26 17:34:13 [ERROR]: Auth middleware error: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+PrismaClientKnownRequestError: 
+Invalid `prisma.admin.findUnique()` invocation in
+/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:38
+
+  13 const shopId = parseInt(process.env.DEFAULT_SHOP_ID) || 1;
+  14 
+  15 // Check if user is admin
+→ 16 const admin = await prisma.admin.findUnique(
+The table `public.admins` does not exist in the current database.
+    at $n.handleRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:7315)
+    at $n.handleAndLogRequestError (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6623)
+    at $n.request (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:121:6307)
+    at async l (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/@prisma/client/runtime/library.js:130:9633)
+    at async authMiddleware (/home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/src/middlewares/auth.js:16:19)
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/convenience/session.js:67:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+    at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-01-26 17:35:09 [INFO]: Received SIGINT, shutting down...
+2026-01-26 17:35:09 [INFO]: Database disconnected
+2026-01-26 17:36:46 [INFO]: Database connected successfully
+2026-01-26 17:36:46 [INFO]: Starting bot...
+2026-01-26 17:36:47 [INFO]: Bot started as @shershina_bot
+2026-01-26 17:36:57 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:36:57 [DEBUG]: Duration: 1ms
+2026-01-26 17:36:57 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:36:57 [DEBUG]: Duration: 0ms
+2026-01-26 17:36:57 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:36:57 [DEBUG]: Duration: 1ms
+2026-01-26 17:36:57 [DEBUG]: Query: INSERT INTO "public"."users" ("telegram_id","first_name","username","role","shop_id","created_at","updated_at") VALUES ($1,$2,$3,CAST($4::text AS "public"."Role"),$5,$6,$7) RETURNING "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at"
+2026-01-26 17:36:57 [DEBUG]: Duration: 159ms
+2026-01-26 17:36:57 [INFO]: New user created: Abduqodir (222592599)
+2026-01-26 17:37:02 [DEBUG]: Query: SELECT 1
+2026-01-26 17:37:02 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:02 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:02 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:02 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:02 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:02 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:02 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:06 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:06 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:06 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:06 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:06 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:06 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:13 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:13 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:13 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:13 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:13 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:13 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:15 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:15 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:15 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:15 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:15 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:15 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:19 [DEBUG]: Query: SELECT 1
+2026-01-26 17:37:19 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:19 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:19 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:19 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:19 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:19 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:19 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:25 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:25 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:25 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:25 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:25 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:25 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:25 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 ORDER BY "public"."tires"."brand" ASC, "public"."tires"."size" ASC OFFSET $2
+2026-01-26 17:37:25 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:33 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:33 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:33 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:33 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:33 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:33 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:38 [DEBUG]: Query: SELECT 1
+2026-01-26 17:37:38 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:38 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:38 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:38 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:38 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:38 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:38 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:46 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:46 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:46 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:46 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:46 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:46 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:50 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:50 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:50 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:50 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:50 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:50 [DEBUG]: Duration: 1ms
+2026-01-26 17:37:55 [DEBUG]: Query: SELECT 1
+2026-01-26 17:37:55 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:55 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:55 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:55 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:37:55 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:55 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:37:55 [DEBUG]: Duration: 0ms
+2026-01-26 17:37:55 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE ("public"."tires"."shop_id" = $1 AND "public"."tires"."quantity" > $2) ORDER BY "public"."tires"."brand" ASC, "public"."tires"."size" ASC OFFSET $3
+2026-01-26 17:37:55 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:42 [DEBUG]: Query: SELECT 1
+2026-01-26 17:38:42 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:42 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:42 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:42 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:38:42 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:42 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:42 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:42 [DEBUG]: Query: SELECT COUNT(*) FROM (SELECT "public"."sales"."id" FROM "public"."sales" WHERE "public"."sales"."shop_id" = $1 OFFSET $2) AS "sub"
+2026-01-26 17:38:42 [DEBUG]: Duration: 1ms
+2026-01-26 17:38:42 [DEBUG]: Query: SELECT "public"."sales"."id", "public"."sales"."item_type"::text, "public"."sales"."tire_id", "public"."sales"."used_tire_id", "public"."sales"."quantity", "public"."sales"."total_price", "public"."sales"."admin_id", "public"."sales"."shop_id", "public"."sales"."created_at" FROM "public"."sales" WHERE "public"."sales"."shop_id" = $1 ORDER BY "public"."sales"."created_at" DESC LIMIT $2 OFFSET $3
+2026-01-26 17:38:42 [DEBUG]: Duration: 2ms
+2026-01-26 17:38:45 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:45 [DEBUG]: Duration: 3ms
+2026-01-26 17:38:45 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:38:45 [DEBUG]: Duration: 3ms
+2026-01-26 17:38:45 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:45 [DEBUG]: Duration: 3ms
+2026-01-26 17:38:49 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:49 [DEBUG]: Duration: 1ms
+2026-01-26 17:38:49 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:38:49 [DEBUG]: Duration: 1ms
+2026-01-26 17:38:49 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:49 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:52 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:52 [DEBUG]: Duration: 1ms
+2026-01-26 17:38:52 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:38:52 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:52 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:52 [DEBUG]: Duration: 0ms
+2026-01-26 17:38:53 [DEBUG]: Query: SELECT "public"."used_tires"."id", "public"."used_tires"."shop_id", "public"."used_tires"."size", "public"."used_tires"."condition"::text, "public"."used_tires"."price_buy", "public"."used_tires"."price_sell", "public"."used_tires"."quantity", "public"."used_tires"."created_at", "public"."used_tires"."updated_at" FROM "public"."used_tires" WHERE "public"."used_tires"."shop_id" = $1 OFFSET $2
+2026-01-26 17:38:53 [DEBUG]: Duration: 1ms
+2026-01-26 17:38:53 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 OFFSET $2
+2026-01-26 17:38:53 [DEBUG]: Duration: 1ms
+2026-01-26 17:38:53 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:38:53 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:24 [DEBUG]: Query: SELECT 1
+2026-01-26 17:39:24 [DEBUG]: Duration: 0ms
+2026-01-26 17:39:24 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:24 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:24 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:39:24 [DEBUG]: Duration: 0ms
+2026-01-26 17:39:24 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:24 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:29 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:29 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:29 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:39:29 [DEBUG]: Duration: 0ms
+2026-01-26 17:39:29 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:29 [DEBUG]: Duration: 0ms
+2026-01-26 17:39:29 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE ("public"."tires"."shop_id" = $1 AND "public"."tires"."quantity" > $2) ORDER BY "public"."tires"."brand" ASC, "public"."tires"."size" ASC OFFSET $3
+2026-01-26 17:39:29 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:35 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:35 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:35 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:39:35 [DEBUG]: Duration: 0ms
+2026-01-26 17:39:35 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:35 [DEBUG]: Duration: 0ms
+2026-01-26 17:39:43 [DEBUG]: Query: SELECT 1
+2026-01-26 17:39:43 [DEBUG]: Duration: 0ms
+2026-01-26 17:39:43 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:43 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:43 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:39:43 [DEBUG]: Duration: 1ms
+2026-01-26 17:39:43 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:39:43 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:04 [DEBUG]: Query: SELECT 1
+2026-01-26 17:40:04 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:04 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:04 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:04 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:04 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:04 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:04 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:07 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:07 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:07 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:07 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:07 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:07 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:07 [DEBUG]: Query: SELECT 1
+2026-01-26 17:40:07 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:07 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 ORDER BY "public"."tires"."brand" ASC, "public"."tires"."size" ASC LIMIT $2 OFFSET $3
+2026-01-26 17:40:07 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:07 [DEBUG]: Query: SELECT COUNT(*) FROM (SELECT "public"."tires"."id" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 OFFSET $2) AS "sub"
+2026-01-26 17:40:07 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:10 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:10 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:10 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:10 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:10 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:10 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:10 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE ("public"."tires"."shop_id" = $1 AND "public"."tires"."quantity" > $2) ORDER BY "public"."tires"."brand" ASC, "public"."tires"."size" ASC OFFSET $3
+2026-01-26 17:40:10 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:12 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:12 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:12 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:12 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:12 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:12 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:17 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:17 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:17 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:17 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:17 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:17 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:23 [DEBUG]: Query: SELECT 1
+2026-01-26 17:40:23 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:23 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:23 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:23 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:23 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:23 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:23 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:36 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:36 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:36 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:36 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:36 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:36 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:40 [DEBUG]: Query: SELECT 1
+2026-01-26 17:40:40 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:40 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:40 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:40 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:40 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:40 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:40 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:43 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:43 [DEBUG]: Duration: 1ms
+2026-01-26 17:40:43 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:43 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:43 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:43 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:46 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:46 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:46 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 17:40:46 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:46 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 17:40:46 [DEBUG]: Duration: 0ms
+2026-01-26 17:40:46 [DEBUG]: Query: INSERT INTO "public"."tires" ("shop_id","brand","size","price_buy","price_sell","quantity","created_at","updated_at") VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at"
+2026-01-26 17:40:46 [DEBUG]: Duration: 10ms
+2026-01-26 17:40:46 [DEBUG]: Query: INSERT INTO "public"."warehouse_logs" ("item_type","tire_id","log_type","quantity","price","created_at") VALUES (CAST($1::text AS "public"."ItemType"),$2,CAST($3::text AS "public"."LogType"),$4,$5,$6) RETURNING "public"."warehouse_logs"."id", "public"."warehouse_logs"."item_type"::text, "public"."warehouse_logs"."tire_id", "public"."warehouse_logs"."used_tire_id", "public"."warehouse_logs"."log_type"::text, "public"."warehouse_logs"."quantity", "public"."warehouse_logs"."price", "public"."warehouse_logs"."created_at"
+2026-01-26 17:40:46 [DEBUG]: Duration: 20ms
+2026-01-26 18:00:06 [INFO]: Received SIGINT, shutting down...
+2026-01-26 18:00:06 [INFO]: Database disconnected
+2026-01-26 18:00:09 [INFO]: Database connected successfully
+2026-01-26 18:00:09 [INFO]: Starting bot...
+2026-01-26 18:00:10 [INFO]: Bot started as @shershina_bot
+2026-01-26 18:00:49 [DEBUG]: Query: SELECT 1
+2026-01-26 18:00:49 [DEBUG]: Duration: 0ms
+2026-01-26 18:00:49 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:00:49 [DEBUG]: Duration: 1ms
+2026-01-26 18:00:49 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:00:49 [DEBUG]: Duration: 0ms
+2026-01-26 18:00:49 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:00:49 [DEBUG]: Duration: 1ms
+2026-01-26 18:01:23 [DEBUG]: Query: SELECT 1
+2026-01-26 18:01:23 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:23 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:23 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:23 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:23 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:23 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:23 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:23 [DEBUG]: Query: INSERT INTO "public"."users" ("telegram_id","first_name","last_name","username","role","shop_id","created_at","updated_at") VALUES ($1,$2,$3,$4,CAST($5::text AS "public"."Role"),$6,$7,$8) RETURNING "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at"
+2026-01-26 18:01:23 [DEBUG]: Duration: 69ms
+2026-01-26 18:01:23 [INFO]: New user created: Sher (7565966509)
+2026-01-26 18:01:41 [DEBUG]: Query: SELECT 1
+2026-01-26 18:01:41 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:41 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:41 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:41 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:41 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:41 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:41 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:58 [DEBUG]: Query: SELECT 1
+2026-01-26 18:01:58 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:58 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:58 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:58 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:01:58 [DEBUG]: Duration: 0ms
+2026-01-26 18:01:58 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:01:58 [DEBUG]: Duration: 0ms
+2026-01-26 18:02:06 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:02:06 [DEBUG]: Duration: 0ms
+2026-01-26 18:02:06 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:02:06 [DEBUG]: Duration: 0ms
+2026-01-26 18:02:06 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:02:06 [DEBUG]: Duration: 0ms
+2026-01-26 18:02:06 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 ORDER BY "public"."tires"."brand" ASC, "public"."tires"."size" ASC OFFSET $2
+2026-01-26 18:02:06 [DEBUG]: Duration: 1ms
+2026-01-26 18:02:36 [DEBUG]: Query: SELECT 1
+2026-01-26 18:02:36 [DEBUG]: Duration: 0ms
+2026-01-26 18:02:36 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:02:36 [DEBUG]: Duration: 0ms
+2026-01-26 18:02:36 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:02:36 [DEBUG]: Duration: 0ms
+2026-01-26 18:02:36 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:02:36 [DEBUG]: Duration: 1ms
+2026-01-26 18:04:36 [DEBUG]: Query: SELECT 1
+2026-01-26 18:04:36 [DEBUG]: Duration: 0ms
+2026-01-26 18:04:36 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:04:36 [DEBUG]: Duration: 1ms
+2026-01-26 18:04:36 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:04:36 [DEBUG]: Duration: 1ms
+2026-01-26 18:04:36 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:04:36 [DEBUG]: Duration: 1ms
+2026-01-26 18:04:44 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:04:44 [DEBUG]: Duration: 1ms
+2026-01-26 18:04:44 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:04:44 [DEBUG]: Duration: 1ms
+2026-01-26 18:04:44 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:04:44 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:36 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:36 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:36 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:36 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:36 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:36 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:38 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:38 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:38 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:38 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:38 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:38 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:41 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:41 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:41 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:41 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:41 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:41 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:43 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:43 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:43 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:43 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:43 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:43 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:43 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 ORDER BY "public"."tires"."brand" ASC, "public"."tires"."size" ASC LIMIT $2 OFFSET $3
+2026-01-26 18:05:43 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:43 [DEBUG]: Query: SELECT COUNT(*) FROM (SELECT "public"."tires"."id" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 OFFSET $2) AS "sub"
+2026-01-26 18:05:43 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:51 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:51 [DEBUG]: Duration: 3ms
+2026-01-26 18:05:51 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:51 [DEBUG]: Duration: 2ms
+2026-01-26 18:05:51 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:51 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:53 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:53 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:53 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:53 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:53 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:53 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:56 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:56 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:56 [DEBUG]: Duration: 0ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT 1
+2026-01-26 18:05:56 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE "public"."tires"."shop_id" = $1 OFFSET $2
+2026-01-26 18:05:56 [DEBUG]: Duration: 2ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."used_tires"."id", "public"."used_tires"."shop_id", "public"."used_tires"."size", "public"."used_tires"."condition"::text, "public"."used_tires"."price_buy", "public"."used_tires"."price_sell", "public"."used_tires"."quantity", "public"."used_tires"."created_at", "public"."used_tires"."updated_at" FROM "public"."used_tires" WHERE "public"."used_tires"."shop_id" = $1 OFFSET $2
+2026-01-26 18:05:56 [DEBUG]: Duration: 3ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."sales"."id", "public"."sales"."item_type"::text, "public"."sales"."tire_id", "public"."sales"."used_tire_id", "public"."sales"."quantity", "public"."sales"."total_price", "public"."sales"."admin_id", "public"."sales"."shop_id", "public"."sales"."created_at" FROM "public"."sales" WHERE "public"."sales"."shop_id" = $1 ORDER BY "public"."sales"."created_at" DESC LIMIT $2 OFFSET $3
+2026-01-26 18:05:56 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:05:56 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."warehouse_logs"."id", "public"."warehouse_logs"."item_type"::text, "public"."warehouse_logs"."tire_id", "public"."warehouse_logs"."used_tire_id", "public"."warehouse_logs"."log_type"::text, "public"."warehouse_logs"."quantity", "public"."warehouse_logs"."price", "public"."warehouse_logs"."created_at" FROM "public"."warehouse_logs" WHERE 1=1 ORDER BY "public"."warehouse_logs"."created_at" DESC LIMIT $1 OFFSET $2
+2026-01-26 18:05:56 [DEBUG]: Duration: 1ms
+2026-01-26 18:05:56 [DEBUG]: Query: SELECT "public"."tires"."id", "public"."tires"."shop_id", "public"."tires"."brand", "public"."tires"."size", "public"."tires"."price_buy", "public"."tires"."price_sell", "public"."tires"."quantity", "public"."tires"."created_at", "public"."tires"."updated_at" FROM "public"."tires" WHERE "public"."tires"."id" IN ($1) OFFSET $2
+2026-01-26 18:05:56 [DEBUG]: Duration: 0ms
+2026-01-26 18:07:43 [DEBUG]: Query: SELECT 1
+2026-01-26 18:07:43 [DEBUG]: Duration: 0ms
+2026-01-26 18:07:43 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:07:43 [DEBUG]: Duration: 4ms
+2026-01-26 18:07:43 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:07:43 [DEBUG]: Duration: 1ms
+2026-01-26 18:07:43 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:07:43 [DEBUG]: Duration: 1ms
+2026-01-26 18:07:48 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:07:48 [DEBUG]: Duration: 1ms
+2026-01-26 18:07:48 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:07:48 [DEBUG]: Duration: 0ms
+2026-01-26 18:07:48 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:07:48 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:01 [DEBUG]: Query: SELECT 1
+2026-01-26 18:08:01 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:01 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:01 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:01 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:01 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:01 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:01 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:10 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:10 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:10 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:10 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:10 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:11 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:17 [DEBUG]: Query: SELECT 1
+2026-01-26 18:08:17 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:17 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:17 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:17 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:17 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:17 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:17 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:19 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:19 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:19 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:19 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:19 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:19 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:21 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:21 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:21 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:21 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:21 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:21 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:24 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:24 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:24 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:24 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:24 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:24 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:49 [DEBUG]: Query: SELECT 1
+2026-01-26 18:08:49 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:49 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:49 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:49 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:49 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:49 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:49 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:49 [DEBUG]: Query: UPDATE "public"."shops" SET "location" = $1, "updated_at" = $2 WHERE ("public"."shops"."id" = $3 AND 1=1) RETURNING "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at"
+2026-01-26 18:08:49 [DEBUG]: Duration: 42ms
+2026-01-26 18:08:52 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:52 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:52 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:52 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:52 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:52 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:55 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:55 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:55 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:55 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:55 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:55 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:58 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:58 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:58 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:58 [DEBUG]: Duration: 0ms
+2026-01-26 18:08:58 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:58 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:58 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE "public"."admins"."shop_id" = $1 OFFSET $2
+2026-01-26 18:08:58 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:58 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:08:58 [DEBUG]: Duration: 1ms
+2026-01-26 18:08:58 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:08:58 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:03 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:03 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:03 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:09:03 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:03 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:03 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:12 [DEBUG]: Query: SELECT 1
+2026-01-26 18:09:12 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:12 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:12 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:12 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:09:12 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:12 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:12 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:15 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:15 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:15 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE "public"."shops"."id" IN ($1) OFFSET $2
+2026-01-26 18:09:15 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:15 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:15 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:45 [DEBUG]: Query: SELECT 1
+2026-01-26 18:09:45 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:45 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:45 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:45 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:45 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:45 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:45 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:47 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:47 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:47 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:47 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:47 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:47 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:51 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:51 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:51 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:51 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:51 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:51 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:55 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:55 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:55 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:55 [DEBUG]: Duration: 1ms
+2026-01-26 18:09:55 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:55 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:57 [DEBUG]: Query: SELECT "public"."admins"."id", "public"."admins"."telegram_id", "public"."admins"."shop_id", "public"."admins"."created_at" FROM "public"."admins" WHERE ("public"."admins"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:57 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:57 [DEBUG]: Query: SELECT "public"."shops"."id", "public"."shops"."name", "public"."shops"."location", "public"."shops"."phone", "public"."shops"."latitude", "public"."shops"."longitude", "public"."shops"."created_at", "public"."shops"."updated_at" FROM "public"."shops" WHERE ("public"."shops"."id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:57 [DEBUG]: Duration: 0ms
+2026-01-26 18:09:57 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
+2026-01-26 18:09:57 [DEBUG]: Duration: 0ms
