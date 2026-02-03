@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "build": "npm install && npm run build",
     "dev": "node src/index.js",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
