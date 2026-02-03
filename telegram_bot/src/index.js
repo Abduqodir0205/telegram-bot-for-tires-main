@@ -4,6 +4,9 @@ const { Bot, session, InlineKeyboard, Keyboard, InputFile } = require("grammy");
 const { Pool } = require("pg");
 const ExcelJS = require("exceljs");
 const cron = require("node-cron");
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
 // ==================== DATABASE SETUP ====================
 const pool = new Pool({
@@ -2573,9 +2576,6 @@ async function sendScheduledReports() {
     console.error("Scheduled report error:", e);
   }
 }
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
 
 app.get('/', (req, res) => res.send('Bot is running!'));
 
