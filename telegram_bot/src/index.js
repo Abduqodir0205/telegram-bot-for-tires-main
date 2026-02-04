@@ -1,7 +1,9 @@
 require("dotenv").config();
 
+const https = require("https");
 const { Bot, session, InlineKeyboard, Keyboard, InputFile } = require("grammy");
 const { Pool } = require("pg");
+const { extractTableFromImage } = require("./gemini-ocr.js");
 const ExcelJS = require("exceljs");
 const cron = require("node-cron");
 const express = require('express');
@@ -162,32 +164,167 @@ async function ensureRabochiySotuvTable() {
   )`);
 }
 
-// Dollar kursini o'zgartirganda tarixga yozish
-async function setDollarKurs(newKurs) {
-  await setSetting("dollar_kurs", newKurs.toString());
-  await pool.query("INSERT INTO dollar_history (kurs) VALUES ($1)", [newKurs]);
+// ==================== KO'P DO'KON: shops, shop_admins, shop_id migratsiya ====================
+const BOSS_ADMIN_TELEGRAM_ID = 222592599;
+
+async function ensureShopsAndAdmins() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS shops (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(100) NOT NULL,
+      phone TEXT,
+      address TEXT,
+      dollar_kurs VARCHAR(20),
+      report_daily_time VARCHAR(10) DEFAULT '21:00',
+      report_weekly_day VARCHAR(2) DEFAULT '5',
+      latitude VARCHAR(20),
+      longitude VARCHAR(20),
+      working_hours VARCHAR(50),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS shop_admins (
+      telegram_id BIGINT NOT NULL,
+      shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+      PRIMARY KEY (telegram_id, shop_id)
+    )
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS shop_settings (
+      shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
+      key VARCHAR(50) NOT NULL,
+      value TEXT,
+      PRIMARY KEY (shop_id, key)
+    )
+  `);
+  for (const tbl of ["kirim", "chiqim", "rabochiy_balon", "olinish_kerak"]) {
+    try {
+      await pool.query(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS shop_id INTEGER DEFAULT 1`);
+    } catch (e) {
+      if (!e.message?.includes("already exists")) console.warn("shop_id migration:", e.message);
+    }
+  }
+  try {
+    await pool.query(`ALTER TABLE rabochiy_sotuv ADD COLUMN IF NOT EXISTS shop_id INTEGER DEFAULT 1`);
+  } catch (e) {
+    if (!e.message?.includes("already exists")) console.warn("rabochiy_sotuv shop_id:", e.message);
+  }
+  try {
+    await pool.query(`ALTER TABLE dollar_history ADD COLUMN IF NOT EXISTS shop_id INTEGER DEFAULT 1`);
+  } catch (e) {
+    if (!e.message?.includes("already exists")) console.warn("dollar_history shop_id:", e.message);
+  }
+  const hasShop1 = await pool.query("SELECT id FROM shops WHERE id = 1");
+  if (hasShop1.rows.length === 0) {
+    await pool.query(`
+      INSERT INTO shops (id, name, phone, address, dollar_kurs, report_daily_time, report_weekly_day, latitude, longitude, working_hours)
+      VALUES (1, 'SherShina', '+998 90 123 45 67', 'Toshkent shahri', '12800', '21:00', '5', '41.311081', '69.240562', '09:00 - 20:00')
+    `);
+    const defaults = [
+      ["shop_name", "SherShina"], ["phone", "+998 90 123 45 67"], ["address", "Toshkent shahri"],
+      ["dollar_kurs", "12800"], ["latitude", "41.311081"], ["longitude", "69.240562"],
+      ["working_hours", "09:00 - 20:00"], ["report_daily_time", "21:00"], ["report_weekly_day", "5"]
+    ];
+    for (const [k, v] of defaults) {
+      await pool.query(
+        "INSERT INTO shop_settings (shop_id, key, value) VALUES (1, $1, $2) ON CONFLICT (shop_id, key) DO UPDATE SET value = $2",
+        [k, v]
+      );
+    }
+    const envAdmins = (process.env.ADMIN_IDS || "").split(",").map(id => parseInt(id.trim())).filter(Boolean);
+    for (const tid of envAdmins) {
+      try {
+        await pool.query(
+          "INSERT INTO shop_admins (telegram_id, shop_id) VALUES ($1, $2) ON CONFLICT (telegram_id, shop_id) DO NOTHING",
+          [tid, 1]
+        );
+      } catch (e) { /* ignore */ }
+    }
+    await pool.query(
+      "INSERT INTO shop_admins (telegram_id, shop_id) VALUES ($1, $2) ON CONFLICT (telegram_id, shop_id) DO NOTHING",
+      [BOSS_ADMIN_TELEGRAM_ID, 1]
+    );
+    await pool.query("SELECT setval(pg_get_serial_sequence('shops', 'id'), (SELECT COALESCE(MAX(id), 1) FROM shops))").catch(() => {});
+  } else {
+    await pool.query("SELECT setval(pg_get_serial_sequence('shops', 'id'), (SELECT COALESCE(MAX(id), 1) FROM shops))").catch(() => {});
+  }
+}
+
+// Indekslar — so'rovlar tezroq ishlashi uchun
+async function ensureIndexes() {
+  const indexes = [
+    "CREATE INDEX IF NOT EXISTS idx_kirim_shop_razmer_brend ON kirim (shop_id, razmer, balon_turi)",
+    "CREATE INDEX IF NOT EXISTS idx_kirim_shop_id ON kirim (shop_id)",
+    "CREATE INDEX IF NOT EXISTS idx_chiqim_shop_razmer_brend ON chiqim (shop_id, razmer, balon_turi)",
+    "CREATE INDEX IF NOT EXISTS idx_chiqim_shop_id ON chiqim (shop_id)",
+    "CREATE INDEX IF NOT EXISTS idx_chiqim_sana ON chiqim (sana)",
+    "CREATE INDEX IF NOT EXISTS idx_kirim_sana ON kirim (sana)",
+    "CREATE INDEX IF NOT EXISTS idx_rabochiy_balon_shop ON rabochiy_balon (shop_id)",
+    "CREATE INDEX IF NOT EXISTS idx_rabochiy_sotuv_shop_sana ON rabochiy_sotuv (shop_id, sana)",
+    "CREATE INDEX IF NOT EXISTS idx_shop_settings_shop_key ON shop_settings (shop_id, key)",
+    "CREATE INDEX IF NOT EXISTS idx_dollar_history_shop ON dollar_history (shop_id, changed_at DESC)"
+  ];
+  for (const sql of indexes) {
+    try {
+      await pool.query(sql);
+    } catch (e) {
+      if (!e.message?.includes("already exists")) console.warn("Index:", e.message);
+    }
+  }
+}
+
+// Dollar kursini o'zgartirganda tarixga yozish (shop bo'yicha)
+async function setDollarKurs(newKurs, shopId = 1) {
+  await setSetting("dollar_kurs", newKurs.toString(), shopId);
+  await pool.query("INSERT INTO dollar_history (kurs, shop_id) VALUES ($1, $2)", [newKurs, shopId]);
 }
 
 // Kirim va chiqimda kursni olish uchun
-async function getKursByDate(date) {
+async function getKursByDate(date, shopId = 1) {
   const res = await pool.query(
-    `SELECT kurs FROM dollar_history WHERE changed_at <= $1 ORDER BY changed_at DESC LIMIT 1`,
-    [date]
+    `SELECT kurs FROM dollar_history WHERE shop_id = $1 AND changed_at <= $2 ORDER BY changed_at DESC LIMIT 1`,
+    [shopId, date]
   );
-  return Number(res.rows[0]?.kurs || await getSetting("dollar_kurs"));
+  return Number(res.rows[0]?.kurs || await getSetting("dollar_kurs", shopId));
 }
 
 // ==================== HELPER FUNCTIONS ====================
-async function getSetting(key) {
-  const result = await pool.query("SELECT value FROM settings WHERE key = $1", [key]);
-  return result.rows[0]?.value || null;
+async function getSetting(key, shopId = 1) {
+  const result = await pool.query("SELECT value FROM shop_settings WHERE shop_id = $1 AND key = $2", [shopId, key]);
+  if (result.rows[0]?.value != null) return result.rows[0].value;
+  const fallback = await pool.query("SELECT value FROM settings WHERE key = $1", [key]);
+  return fallback.rows[0]?.value || null;
 }
 
-async function setSetting(key, value) {
+async function setSetting(key, value, shopId = 1) {
   await pool.query(
-    "INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2",
-    [key, value]
+    "INSERT INTO shop_settings (shop_id, key, value) VALUES ($1, $2, $3) ON CONFLICT (shop_id, key) DO UPDATE SET value = $3",
+    [shopId, key, value]
   );
+}
+
+function isBoss(telegramId) {
+  return Number(telegramId) === BOSS_ADMIN_TELEGRAM_ID;
+}
+
+async function getAdminShopIds(telegramId) {
+  if (isBoss(telegramId)) {
+    const r = await pool.query("SELECT id FROM shops ORDER BY id");
+    return r.rows.map((x) => x.id);
+  }
+  const r = await pool.query("SELECT shop_id FROM shop_admins WHERE telegram_id = $1 ORDER BY shop_id", [telegramId]);
+  return r.rows.map((x) => x.shop_id);
+}
+
+async function isAdmin(telegramId) {
+  if (isBoss(telegramId)) return true;
+  const r = await pool.query("SELECT 1 FROM shop_admins WHERE telegram_id = $1 LIMIT 1", [telegramId]);
+  return r.rows.length > 0;
+}
+
+function getCurrentShopId(ctx) {
+  return ctx.session?.shopId != null ? ctx.session.shopId : 1;
 }
 
 async function getAllSizes() {
@@ -200,60 +337,116 @@ async function getAllBrands() {
   return result.rows.map(r => r.name);
 }
 
-async function getStock(razmer, balon_turi) {
-  const kirdi = await pool.query(
-    "SELECT COALESCE(SUM(soni), 0) as total FROM kirim WHERE razmer = $1 AND balon_turi = $2",
-    [razmer, balon_turi]
+async function getStock(razmer, balon_turi, shopId = 1) {
+  const r = await pool.query(
+    `SELECT (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)) -
+            (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)) AS qoldiq`,
+    [razmer, balon_turi, shopId]
   );
-  const sotildi = await pool.query(
-    "SELECT COALESCE(SUM(sotildi), 0) as total FROM chiqim WHERE razmer = $1 AND balon_turi = $2",
-    [razmer, balon_turi]
-  );
-  return Number(kirdi.rows[0].total) - Number(sotildi.rows[0].total);
+  return Number(r.rows[0]?.qoldiq ?? 0);
 }
 
-async function getSotishNarx(razmer, balon_turi) {
+async function getSotishNarx(razmer, balon_turi, shopId = 1) {
   const result = await pool.query(
-    "SELECT sotish_narx FROM kirim WHERE razmer = $1 AND balon_turi = $2 ORDER BY id DESC LIMIT 1",
-    [razmer, balon_turi]
+    "SELECT sotish_narx FROM kirim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3) ORDER BY id DESC LIMIT 1",
+    [razmer, balon_turi, shopId]
   );
   return Number(result.rows[0]?.sotish_narx || 0);
 }
 
-async function getKelganNarx(razmer, balon_turi) {
+// O'rtacha tannarx (kelgan_narx) — sklad qiymati va foyda hisoblashning markaziy funksiyasi
+async function getKelganNarx(razmer, balon_turi, shopId = 1) {
   const result = await pool.query(
-    "SELECT ROUND(AVG(kelgan_narx)) as avg FROM kirim WHERE razmer = $1 AND balon_turi = $2",
-    [razmer, balon_turi]
+    "SELECT ROUND(AVG(kelgan_narx)) as avg FROM kirim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)",
+    [razmer, balon_turi, shopId]
   );
   return Number(result.rows[0]?.avg || 0);
 }
 
 // Skladda bor razmerlar (qoldiq > 0)
-async function getSizesWithStock() {
+async function getSizesWithStock(shopId = 1) {
   const result = await pool.query(`
     SELECT DISTINCT k.razmer FROM kirim k
-    WHERE (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer AND balon_turi = k.balon_turi) -
-          (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer AND balon_turi = k.balon_turi) > 0
+    WHERE (k.shop_id IS NULL OR k.shop_id = $1) AND
+    (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $1)) -
+    (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $1)) > 0
     ORDER BY k.razmer
-  `);
+  `, [shopId]);
   return result.rows.map(r => r.razmer);
 }
 
 // Berilgan razmer uchun skladda bor brendlar
-async function getBrandsWithStock(razmer) {
+async function getBrandsWithStock(razmer, shopId = 1) {
   const result = await pool.query(`
     SELECT DISTINCT k.balon_turi FROM kirim k
-    WHERE k.razmer = $1 AND
-      (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer AND balon_turi = k.balon_turi) -
-      (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer AND balon_turi = k.balon_turi) > 0
+    WHERE k.razmer = $1 AND (k.shop_id IS NULL OR k.shop_id = $2) AND
+      (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $2)) -
+      (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $2)) > 0
     ORDER BY k.balon_turi
-  `, [razmer]);
+  `, [razmer, shopId]);
   return result.rows.map(r => r.balon_turi);
 }
 
-function isAdmin(telegramId) {
-  const envAdmins = (process.env.ADMIN_IDS || "").split(",").map(id => parseInt(id.trim()));
-  return envAdmins.includes(telegramId);
+// Sklad tannarx (investitsiya) va kutilayotgan sof foyda — bitta SQL (N+1 yo'q)
+async function getSkladValuationByTannarx(shopId = 1) {
+  const r = await pool.query(`
+    WITH agg AS (
+      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi, ROUND(AVG(k.kelgan_narx))::int AS tan_narx
+      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
+    ),
+    outgo AS (
+      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
+      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
+    ),
+    qoldiq AS (
+      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q, a.tan_narx
+      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
+    ),
+    last_sotish AS (
+      SELECT DISTINCT ON (razmer, balon_turi) razmer, balon_turi, sotish_narx
+      FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY razmer, balon_turi, id DESC
+    )
+    SELECT
+      COALESCE(SUM(q.q * q.tan_narx), 0)::bigint AS investitsiya,
+      COALESCE(SUM(q.q * (COALESCE(s.sotish_narx, 0) - q.tan_narx)), 0)::bigint AS kutilayotgan
+    FROM qoldiq q
+    LEFT JOIN last_sotish s ON q.razmer = s.razmer AND q.balon_turi = s.balon_turi
+    WHERE q.q > 0
+  `, [shopId]);
+  return {
+    investitsiya: Number(r.rows[0]?.investitsiya ?? 0),
+    kutilayotganFoyda: Number(r.rows[0]?.kutilayotgan ?? 0)
+  };
+}
+
+// Qoldiq hisoboti uchun barcha pozitsiyalar (bitta so'rov — tsikl emas)
+async function getSkladRowsWithValuation(shopId = 1) {
+  const r = await pool.query(`
+    WITH agg AS (
+      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi, ROUND(AVG(k.kelgan_narx))::int AS tan_narx
+      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
+    ),
+    outgo AS (
+      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
+      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
+    ),
+    qoldiq AS (
+      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q, a.tan_narx
+      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
+    ),
+    last_sotish AS (
+      SELECT DISTINCT ON (razmer, balon_turi) razmer, balon_turi, sotish_narx
+      FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY razmer, balon_turi, id DESC
+    ),
+    with_kirdi AS (SELECT a.razmer, a.balon_turi, a.kirdi FROM agg a)
+    SELECT q.razmer, q.balon_turi, k.kirdi, (k.kirdi - q.q) AS sotildi, q.q AS qoldiq, q.tan_narx, COALESCE(s.sotish_narx, 0) AS sotish_narx
+    FROM qoldiq q
+    JOIN with_kirdi k ON q.razmer = k.razmer AND q.balon_turi = k.balon_turi
+    LEFT JOIN last_sotish s ON q.razmer = s.razmer AND q.balon_turi = s.balon_turi
+    WHERE q.q > 0
+    ORDER BY q.razmer, q.balon_turi
+  `, [shopId]);
+  return r.rows;
 }
 
 function formatNumber(num) {
@@ -283,7 +476,8 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
     ctx.session.data = {};
     return;
   }
-  const kurs = parseInt(await getSetting("dollar_kurs")) || 1;
+  const shopId = getCurrentShopId(ctx);
+  const kurs = parseInt(await getSetting("dollar_kurs", shopId)) || 1;
   const kelganSomXom = narx_type === "dollar" ? Math.round((kelgan_narx_input || 0) * kurs) : Math.round(kelgan_narx_input || 0);
   const sotishSomXom = sotishType === "dollar" ? Math.round(sotishNum * kurs) : Math.round(sotishNum);
   const kelganSom = kelganSomXom; // Tan narx yaxlitlanmaydi
@@ -291,11 +485,11 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
   const umumiySom = soni * sotishSom;
   try {
     await pool.query(
-      `INSERT INTO kirim (razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, dollar_kurs, narx_dona) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [razmer, balon_turi, soni, kelganSom, sotishSom, umumiySom, narx_type === "dollar" || sotishType === "dollar" ? kurs : 0, kelganSom]
+      `INSERT INTO kirim (razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, dollar_kurs, narx_dona, shop_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [razmer, balon_turi, soni, kelganSom, sotishSom, umumiySom, narx_type === "dollar" || sotishType === "dollar" ? kurs : 0, kelganSom, shopId]
     );
   } catch (e) {
-    await ctx.reply("❌ Kirim saqlashda xatolik: " + e.message, { reply_markup: adminMenu });
+    await ctx.reply("❌ Kirim saqlashda xatolik: " + e.message, { reply_markup: (await isAdmin(ctx.from.id)) && isBoss(ctx.from.id) ? bossMenu : adminMenu });
     ctx.session.step = null;
     ctx.session.data = {};
     return;
@@ -328,6 +522,14 @@ const adminMenu = new Keyboard()
   .text("📦 Kirim").text("💰 Chiqim").row()
   .text("📊 Xisobot").text("📋 Royxat").row()
   .text("🔄 Rabochiy").text("🛒 Olinish kerak").row()
+  .text("⚙️ Sozlamalar")
+  .resized();
+
+const bossMenu = new Keyboard()
+  .text("📦 Kirim").text("💰 Chiqim").row()
+  .text("📊 Xisobot").text("📋 Royxat").row()
+  .text("🔄 Rabochiy").text("🛒 Olinish kerak").row()
+  .text("🏢 Do'konlar boshqaruvi").text("📂 Do'kon tanlash").row()
   .text("⚙️ Sozlamalar")
   .resized();
 
@@ -545,16 +747,23 @@ bot.command("start", async (ctx) => {
   const userId = ctx.from.id;
   const name = ctx.from.first_name;
 
-  if (isAdmin(userId)) {
+  if (await isAdmin(userId)) {
+    const shopIds = await getAdminShopIds(userId);
+    if (ctx.session.shopId == null && shopIds.length > 0) ctx.session.shopId = shopIds[0];
+    if (ctx.session.shopId == null) ctx.session.shopId = 1;
+    const shopRow = await pool.query("SELECT id, name FROM shops WHERE id = $1", [ctx.session.shopId]);
+    const shopName = shopRow.rows[0]?.name || "Do'kon";
+    const menu = isBoss(userId) ? bossMenu : adminMenu;
     await ctx.reply(
       `🎉 Salom, ${name}!\n\n` +
       `📊 Admin paneliga xush kelibsiz!\n` +
+      `📂 Joriy do'kon: <b>${shopName}</b>\n\n` +
       `Quyidagi tugmalar orqali boshqaring:`,
-      { reply_markup: adminMenu }
+      { reply_markup: menu, parse_mode: "HTML" }
     );
   } else {
-    const shopName = await getSetting("shop_name");
-    const workingHours = await getSetting("working_hours");
+    const shopName = await getSetting("shop_name", 1);
+    const workingHours = await getSetting("working_hours", 1);
     await ctx.reply(
       `🛞 <b>${shopName}</b> ga xush kelibsiz!\n\n` +
       `✨ Eng sifatli shinalar\n` +
@@ -570,7 +779,8 @@ bot.command("start", async (ctx) => {
 bot.hears("🔙 Ortga", async (ctx) => {
   ctx.session.step = null;
   ctx.session.data = {};
-  const kb = isAdmin(ctx.from.id) ? adminMenu : userMenu;
+  const isAd = await isAdmin(ctx.from.id);
+  const kb = isAd ? (isBoss(ctx.from.id) ? bossMenu : adminMenu) : userMenu;
   await ctx.reply("Bosh menyu", { reply_markup: kb });
 });
 
@@ -651,10 +861,10 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
   await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
 });
 
-// Rabochiy Balonlar
+// Rabochiy Balonlar (user — default shop 1)
 bot.hears("🔄 Rabochiy Balonlar", async (ctx) => {
   const result = await pool.query(
-    "SELECT * FROM rabochiy_balon WHERE soni > 0 ORDER BY razmer"
+    "SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = 1) ORDER BY razmer"
   );
 
   if (result.rows.length === 0) {
@@ -755,7 +965,7 @@ bot.callbackQuery("user_go_new", async (ctx) => {
 
 bot.callbackQuery("user_go_rab", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 ORDER BY razmer");
+  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = 1) ORDER BY razmer");
   if (result.rows.length === 0) {
     await ctx.reply("😔 Hozircha rabochiy balonlar yo'q.", { reply_markup: userMenu });
     return;
@@ -827,18 +1037,141 @@ bot.callbackQuery("user_contact", async (ctx) => {
   await ctx.reply(`📞 Telefon: ${phone}\n\nQo'ng'iroq qiling!`);
 });
 
+// ==================== BOSS: DO'KON TANLASH VA BOSHQARUV ====================
+bot.hears("📂 Do'kon tanlash", async (ctx) => {
+  if (!isBoss(ctx.from.id)) return;
+  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  if (shops.rows.length === 0) {
+    await ctx.reply("Hali do'konlar yo'q. Avval \"Do'konlar boshqaruvi\" orqali do'kon qo'shing.");
+    return;
+  }
+  const kb = new InlineKeyboard();
+  for (const s of shops.rows) {
+    kb.text(s.name, `switch_shop_${s.id}`).row();
+  }
+  await ctx.reply("📂 Qaysi do'konda ishlashni xohlaysiz?", { reply_markup: kb });
+});
+
+bot.callbackQuery(/^switch_shop_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = parseInt(ctx.match[1], 10);
+  const r = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
+  if (r.rows.length === 0) return ctx.reply("Do'kon topilmadi.");
+  ctx.session.shopId = shopId;
+  await ctx.reply(`✅ Joriy do'kon: <b>${r.rows[0].name}</b>`, { parse_mode: "HTML", reply_markup: bossMenu });
+});
+
+bot.hears("🏢 Do'konlar boshqaruvi", async (ctx) => {
+  if (!isBoss(ctx.from.id)) return;
+  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  const kb = new InlineKeyboard();
+  for (const s of shops.rows) {
+    kb.text(`${s.name}`, `boss_shop_${s.id}`).row();
+  }
+  kb.text("➕ Yangi do'kon qo'shish", "boss_add_shop").row();
+  kb.text("👤 Adminlarni do'konga biriktirish", "boss_manage_admins");
+  await ctx.reply(
+    "🏢 <b>Do'konlar boshqaruvi</b>\n\nDo'konlarni tanlang yoki adminlarni birlashtiring:",
+    { reply_markup: kb, parse_mode: "HTML" }
+  );
+});
+
+bot.callbackQuery(/^boss_shop_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = parseInt(ctx.match[1], 10);
+  const shop = await pool.query("SELECT * FROM shops WHERE id = $1", [shopId]);
+  if (shop.rows.length === 0) return;
+  const s = shop.rows[0];
+  const admins = await pool.query("SELECT telegram_id FROM shop_admins WHERE shop_id = $1", [shopId]);
+  const list = admins.rows.length ? admins.rows.map((a) => a.telegram_id).join(", ") : "Yo'q";
+  await ctx.reply(
+    `🏪 <b>${s.name}</b>\n` +
+    `📞 ${s.phone || "-"}\n` +
+    `📍 ${s.address || "-"}\n` +
+    `💵 Kurs: ${s.dollar_kurs || "-"}\n\n` +
+    `👤 Adminlar (Telegram ID): ${list}`,
+    { parse_mode: "HTML" }
+  );
+});
+
+bot.callbackQuery("boss_add_shop", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.step = "boss_new_shop_name";
+  await ctx.reply("Yangi do'kon nomini kiriting:", { reply_markup: backBtn });
+});
+
+bot.callbackQuery("boss_manage_admins", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  const kb = new InlineKeyboard();
+  for (const s of shops.rows) {
+    kb.text(`${s.name} — admin qo'shish`, `boss_add_admin_shop_${s.id}`).row();
+    kb.text(`${s.name} — adminlar ro'yxati`, `boss_list_admins_${s.id}`).row();
+  }
+  kb.text("🔙 Orqaga", "boss_back");
+  await ctx.reply("👤 Adminlarni qaysi do'kon bo'yicha boshqarmoqchisiz?", { reply_markup: kb });
+});
+
+bot.callbackQuery(/^boss_add_admin_shop_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = parseInt(ctx.match[1], 10);
+  ctx.session.step = "boss_admin_telegram_id";
+  ctx.session.data = { boss_shop_id: shopId };
+  await ctx.reply("Adminning Telegram ID sini kiriting (masalan: 123456789). ID ni @userinfobot orqali bilib olish mumkin:", { reply_markup: backBtn });
+});
+
+bot.callbackQuery(/^boss_list_admins_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = parseInt(ctx.match[1], 10);
+  const shop = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
+  const admins = await pool.query("SELECT telegram_id FROM shop_admins WHERE shop_id = $1", [shopId]);
+  if (admins.rows.length === 0) {
+    await ctx.reply(`"${shop.rows[0]?.name || shopId}" do'konida adminlar yo'q. "Admin qo'shish" orqali qo'shing.`);
+    return;
+  }
+  const kb = new InlineKeyboard();
+  for (const a of admins.rows) {
+    const tid = a.telegram_id;
+    if (Number(tid) === BOSS_ADMIN_TELEGRAM_ID) continue;
+    kb.text(`ID ${tid} olib tashlash`, `boss_remove_admin_${shopId}_${tid}`).row();
+  }
+  kb.text("🔙 Orqaga", "boss_back");
+  await ctx.reply(`👤 "${shop.rows[0]?.name || shopId}" do'koni adminlari:\n\nOlib tashlash uchun tugmani bosing:`, { reply_markup: kb });
+});
+
+bot.callbackQuery(/^boss_remove_admin_(\d+)_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = parseInt(ctx.match[1], 10);
+  const telegramId = parseInt(ctx.match[2], 10);
+  if (telegramId === BOSS_ADMIN_TELEGRAM_ID) return ctx.reply("Boss adminni olib tashlash mumkin emas.");
+  await pool.query("DELETE FROM shop_admins WHERE shop_id = $1 AND telegram_id = $2", [shopId, telegramId]);
+  await ctx.reply(`✅ Admin (ID: ${telegramId}) ushbu do'kondan olib tashlandi.`);
+});
+
+bot.callbackQuery("boss_back", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await ctx.reply("Bosh menyu", { reply_markup: bossMenu });
+});
+
 // ==================== ADMIN PANEL ====================
 
 // KIRIM
 bot.hears("📦 Kirim", async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
+  if (!(await isAdmin(ctx.from.id))) return;
 
   const kb = new InlineKeyboard()
-    .text("➕ Yangi kirim", "kirim_new").row()
+    .text("➕ Yangi kirim", "kirim_new").text("📷 Rasm orqali kirim", "kirim_photo").row()
     .text("📋 Royxat", "kirim_list");
 
   await ctx.reply("📦 <b>Kirim bo'limi</b>\n\nTovar qabul qilish:", 
     { reply_markup: kb, parse_mode: "HTML" });
+});
+
+bot.callbackQuery("kirim_photo", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.step = "kirim_photo";
+  ctx.session.data = {};
+  await ctx.reply("📷 Chek yoki jadval rasmini yuboring. Rasmda mahsulot nomi, soni va narxlari koʻrinishi kerak.", { reply_markup: backBtn });
 });
 
 bot.callbackQuery("kirim_new", async (ctx) => {
@@ -872,14 +1205,15 @@ bot.callbackQuery(/^kb_(.+)$/, async (ctx) => {
 
 bot.callbackQuery("kirim_list", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM kirim ORDER BY id DESC LIMIT 15");
+  const shopId = getCurrentShopId(ctx);
+  const result = await pool.query("SELECT * FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 15", [shopId]);
 
   if (result.rows.length === 0) {
     await ctx.reply("Kirim ro'yxati bo'sh");
     return;
   }
 
-  const kurs = parseInt(await getSetting("dollar_kurs")) || 1;
+  const kurs = parseInt(await getSetting("dollar_kurs", shopId)) || 1;
   let text = "<b>Kirimlar ro'yxati (so'ngi 15)</b>\n";
   text += "━━━━━━━━━━━━━━━━━━\n";
   for (const r of result.rows) {
@@ -928,7 +1262,7 @@ bot.callbackQuery("kirim_sotish_dollar", async (ctx) => {
 
 // CHIQIM
 bot.hears("💰 Chiqim", async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
+  if (!(await isAdmin(ctx.from.id))) return;
 
   const kb = new InlineKeyboard()
     .text("➕ Yangi sotuv", "chiqim_new").row()
@@ -942,7 +1276,8 @@ bot.callbackQuery("chiqim_new", async (ctx) => {
   ctx.session.step = "chiqim_size";
   ctx.session.data = {};
   await ctx.api.sendChatAction(ctx.chat.id, "typing");
-  const sizesWithStock = await getSizesWithStock();
+  const shopId = getCurrentShopId(ctx);
+  const sizesWithStock = await getSizesWithStock(shopId);
   if (sizesWithStock.length === 0) {
     await ctx.reply("❌ Omborda hozircha tovar yo'q. Avval kirim qiling.");
     return;
@@ -962,7 +1297,8 @@ bot.callbackQuery(/^cs_(.+)$/, async (ctx) => {
   ctx.session.data.razmer = razmer;
   ctx.session.step = "chiqim_brand";
   await ctx.api.sendChatAction(ctx.chat.id, "typing");
-  const brandsWithStock = await getBrandsWithStock(razmer);
+  const shopId = getCurrentShopId(ctx);
+  const brandsWithStock = await getBrandsWithStock(razmer, shopId);
   if (brandsWithStock.length === 0) {
     await ctx.reply("❌ Bu razmerda omborda tovar yo'q.");
     return;
@@ -983,7 +1319,8 @@ bot.callbackQuery(/^cb_(.+)$/, async (ctx) => {
   const balon_turi = ctx.match[1];
   ctx.session.data.balon_turi = balon_turi;
   await ctx.api.sendChatAction(ctx.chat.id, "typing");
-  const stock = await getStock(razmer, balon_turi);
+  const shopId = getCurrentShopId(ctx);
+  const stock = await getStock(razmer, balon_turi, shopId);
   ctx.session.step = "chiqim_soni";
   await ctx.reply(
     `✅ <b>${balon_turi}</b> tanlandi.\n\n📏 Razmer: <b>${razmer}</b>\n🏷 Brend: <b>${balon_turi}</b>\n📦 Omborda: <b>${stock} ta</b>\n\n🔢 <b>Nechta sotildi?</b> sonini yozing:`,
@@ -993,7 +1330,8 @@ bot.callbackQuery(/^cb_(.+)$/, async (ctx) => {
 
 bot.callbackQuery("chiqim_list", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM chiqim ORDER BY id DESC LIMIT 15");
+  const shopId = getCurrentShopId(ctx);
+  const result = await pool.query("SELECT * FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 15", [shopId]);
 
   if (result.rows.length === 0) {
     await ctx.reply("Sotuvlar ro'yxati bo'sh");
@@ -1024,7 +1362,7 @@ bot.callbackQuery("chiqim_list", async (ctx) => {
 
 // XISOBOT
 bot.hears("📊 Xisobot", async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
+  if (!(await isAdmin(ctx.from.id))) return;
 
   const kb = new InlineKeyboard()
     .text("📊 Umumiy", "rep_all").text("📅 Bugungi", "rep_today").row()
@@ -1036,7 +1374,8 @@ bot.hears("📊 Xisobot", async (ctx) => {
 
 bot.callbackQuery("rep_rab_ombor", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const { soni, summa } = await getRabochiyOmborValue();
+  const shopId = getCurrentShopId(ctx);
+  const { soni, summa } = await getRabochiyOmborValue(shopId);
   await ctx.reply(
     `🔄 <b>Ombor (Eski balonlar)</b>\n\n` +
     `Hozirda omboringizda <b>${formatNumber(summa)} so'm</b> lik <b>${soni} ta</b> rabochiy balon bor.`,
@@ -1046,15 +1385,17 @@ bot.callbackQuery("rep_rab_ombor", async (ctx) => {
 
 bot.callbackQuery("rep_all", async (ctx) => {
   await ctx.answerCallbackQuery();
+  const shopId = getCurrentShopId(ctx);
 
   const result = await pool.query(`
     SELECT k.razmer, k.balon_turi,
       COALESCE(SUM(k.soni), 0) as kirdi,
       ROUND(AVG(k.kelgan_narx)) as tan_narxi
     FROM kirim k
+    WHERE (k.shop_id IS NULL OR k.shop_id = $1)
     GROUP BY k.razmer, k.balon_turi
     ORDER BY k.razmer
-  `);
+  `, [shopId]);
 
   if (result.rows.length === 0) {
     await ctx.reply("Ma'lumot yo'q");
@@ -1066,8 +1407,8 @@ bot.callbackQuery("rep_all", async (ctx) => {
 
   for (const r of result.rows) {
     const sotildi = await pool.query(
-      "SELECT COALESCE(SUM(sotildi), 0) as s, COALESCE(SUM(foyda), 0) as f FROM chiqim WHERE razmer = $1 AND balon_turi = $2",
-      [r.razmer, r.balon_turi]
+      "SELECT COALESCE(SUM(sotildi), 0) as s, COALESCE(SUM(foyda), 0) as f FROM chiqim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)",
+      [r.razmer, r.balon_turi, shopId]
     );
     const sold = Number(sotildi.rows[0].s);
     const foyda = Number(sotildi.rows[0].f);
@@ -1086,11 +1427,14 @@ bot.callbackQuery("rep_all", async (ctx) => {
 
 bot.callbackQuery("rep_today", async (ctx) => {
   await ctx.answerCallbackQuery();
+  const shopId = getCurrentShopId(ctx);
   const chiqimRows = await pool.query(
-    "SELECT * FROM chiqim WHERE sana = CURRENT_DATE"
+    "SELECT * FROM chiqim WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)",
+    [shopId]
   );
   const rabSotuvRows = await pool.query(
-    "SELECT * FROM rabochiy_sotuv WHERE sana = CURRENT_DATE"
+    "SELECT * FROM rabochiy_sotuv WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)",
+    [shopId]
   );
 
   let naqdTushum = 0, naqdFoyda = 0, rabQoshildiSoni = 0, rabQoshildiSumma = 0, zaxiraFoyda = 0;
@@ -1129,32 +1473,31 @@ bot.callbackQuery("rep_today", async (ctx) => {
 
 bot.callbackQuery("rep_stock", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query(`
-    SELECT razmer, balon_turi, SUM(soni) as kirdi FROM kirim 
-    GROUP BY razmer, balon_turi ORDER BY razmer
-  `);
+  const shopId = getCurrentShopId(ctx);
+  const rows = await getSkladRowsWithValuation(shopId);
 
-  if (result.rows.length === 0) {
+  if (rows.length === 0) {
     await ctx.reply("Ma'lumot yo'q");
     return;
   }
 
   let text = "📦 <b>QOLDIQ</b>\n━━━━━━━━━━━━━━━━━━\n\n";
-  let jamiSum = 0;
+  let investitsiyaSum = 0;
+  let kutilayotganFoydaSum = 0;
 
-  for (const r of result.rows) {
-    const qoldi = await getStock(r.razmer, r.balon_turi);
-    if (qoldi > 0) {
-      const sotishNarx = await getSotishNarx(r.razmer, r.balon_turi);
-      const jami = qoldi * sotishNarx;
-      jamiSum += jami;
-      text += `🛞 ${r.razmer} | ${r.balon_turi}: <b>${qoldi} ta</b>\n`;
-      text += `💰 Jami: <b>${formatNumber(jami)} so'm</b>\n\n`;
-    }
+  for (const r of rows) {
+    const qoldi = Number(r.qoldiq);
+    const tanNarx = Number(r.tan_narx);
+    const jami = qoldi * tanNarx;
+    investitsiyaSum += jami;
+    kutilayotganFoydaSum += qoldi * (Number(r.sotish_narx) - tanNarx);
+    text += `🛞 ${r.razmer} | ${r.balon_turi}: <b>${qoldi} ta</b>\n`;
+    text += `💰 Sklad tannarxi: <b>${formatNumber(jami)} so'm</b>\n\n`;
   }
 
   text += `━━━━━━━━━━━━━━━━━━\n`;
-  text += `💰 <b>Ombordagi jami tovar: ${formatNumber(jamiSum)} so'm</b>`;
+  text += `💵 <b>Investitsiya (Skladdagi pulingiz): ${formatNumber(investitsiyaSum)} so'm</b>\n`;
+  text += `📈 <b>Kutilayotgan sof foyda: ${formatNumber(kutilayotganFoydaSum)} so'm</b>`;
 
   await ctx.reply(text || "Ombor bo'sh", { parse_mode: "HTML" });
 });
@@ -1180,10 +1523,10 @@ function getDateRange(periodType) {
 }
 
 // Excel: Ma'lumot varaqasiga sana va dollar kursini qo'shish
-async function addExcelInfoSheet(workbook) {
+async function addExcelInfoSheet(workbook, shopId = 1) {
   const infoSheet = workbook.addWorksheet("Ma'lumot", { properties: { tabColor: { argb: "FFD3D3D3" } } });
   const sana = new Date().toLocaleString("uz-UZ");
-  const dollarKurs = await getSetting("dollar_kurs") || "-";
+  const dollarKurs = await getSetting("dollar_kurs", shopId) || "-";
   infoSheet.columns = [
     { header: "Parametr", key: "param", width: 20 },
     { header: "Qiymat", key: "value", width: 40 }
@@ -1238,60 +1581,48 @@ function toDollar(som, kurs) {
 
 async function generateExcelAndSend(ctx, reportType, periodType) {
   try {
+    const shopId = getCurrentShopId(ctx);
     const workbook = new ExcelJS.Workbook();
-    await addExcelInfoSheet(workbook);
+    await addExcelInfoSheet(workbook, shopId);
     const dateStr = new Date().toISOString().slice(0, 10);
-    const kurs = parseFloat(await getSetting("dollar_kurs")) || 1;
+    const kurs = parseFloat(await getSetting("dollar_kurs", shopId)) || 1;
 
     if (reportType === "xisobot") {
       // Umumiy xisobot – bosh ko'rsatkichlar (dollarda, rabochiy so'mda)
-      const [jamiChiqim, jamiKirim, jamiFoyda, qoldiqSum, rabochiyCount] = await Promise.all([
-        pool.query("SELECT COALESCE(SUM(umumiy_qiymat), 0) as s, COALESCE(SUM(foyda), 0) as f FROM chiqim").then(r => ({ sum: Number(r.rows[0].s), foyda: Number(r.rows[0].f) })),
-        pool.query("SELECT COALESCE(SUM(umumiy_qiymat), 0) as s FROM kirim").then(r => Number(r.rows[0].s)),
-        pool.query("SELECT COALESCE(SUM(foyda), 0) as f FROM chiqim").then(r => Number(r.rows[0].f)),
-        pool.query(`SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) as kirdi FROM kirim k GROUP BY k.razmer, k.balon_turi`).then(async r => {
-          let total = 0;
-          for (const row of r.rows) {
-            const q = await getStock(row.razmer, row.balon_turi);
-            const narx = await getSotishNarx(row.razmer, row.balon_turi);
-            total += q * narx;
-          }
-          return total;
-        }),
-        pool.query("SELECT COALESCE(SUM(soni), 0) as c FROM rabochiy_balon").then(r => Number(r.rows[0].c))
+      const [jamiChiqim, jamiKirim, jamiFoyda, skladValuation, rabochiyCount] = await Promise.all([
+        pool.query("SELECT COALESCE(SUM(umumiy_qiymat), 0) as s, COALESCE(SUM(foyda), 0) as f FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => ({ sum: Number(r.rows[0].s), foyda: Number(r.rows[0].f) })),
+        pool.query("SELECT COALESCE(SUM(umumiy_qiymat), 0) as s FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => Number(r.rows[0].s)),
+        pool.query("SELECT COALESCE(SUM(foyda), 0) as f FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => Number(r.rows[0].f)),
+        getSkladValuationByTannarx(shopId),
+        pool.query("SELECT COALESCE(SUM(soni), 0) as c FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => Number(r.rows[0].c))
       ]);
       const umSheet = workbook.addWorksheet("Umumiy xisobot");
       umSheet.columns = [
         { header: "Ko'rsatkich", key: "name", width: 28 },
         { header: "Qiymat", key: "value", width: 20 }
       ];
-      const rabOmbor = await getRabochiyOmborValue();
+      const rabOmbor = await getRabochiyOmborValue(shopId);
       umSheet.addRow({ name: "Jami kirim ($)", value: toDollar(jamiKirim, kurs) });
       umSheet.addRow({ name: "Jami chiqim/sotuv ($)", value: toDollar(jamiChiqim.sum, kurs) });
       umSheet.addRow({ name: "Jami foyda ($)", value: toDollar(jamiFoyda, kurs) });
-      umSheet.addRow({ name: "Ombordagi qoldiq qiymati ($)", value: toDollar(qoldiqSum, kurs) });
+      umSheet.addRow({ name: "Investitsiya (Skladdagi pulingiz) ($)", value: toDollar(skladValuation.investitsiya, kurs) });
+      umSheet.addRow({ name: "Kutilayotgan sof foyda ($)", value: toDollar(skladValuation.kutilayotganFoyda, kurs) });
       umSheet.addRow({ name: "Eski balonlar ombori (so'm)", value: formatNumber(rabOmbor.summa) + " (" + rabOmbor.soni + " ta)" });
       umSheet.addRow({ name: "Rabochiy balonlar (dona)", value: String(rabochiyCount) });
-      // Qoldiq qisqacha
-      const qoldiqRows = await pool.query(`
-        SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) as kirdi FROM kirim k GROUP BY k.razmer, k.balon_turi ORDER BY k.razmer
-      `);
+      // Qoldiq qisqacha (bitta so'rov)
+      const qoldiqRows = await getSkladRowsWithValuation(shopId);
       const qSheet = workbook.addWorksheet("Qoldiq");
       qSheet.columns = [
         { header: "Razmer", key: "razmer", width: 14 },
         { header: "Brend", key: "balon_turi", width: 20 },
         { header: "Qoldiq", key: "qoldiq", width: 10 },
-        { header: "Jami ($)", key: "jami", width: 12 }
+        { header: "Qoldiq qiymati (tannarx) ($)", key: "jami", width: 22 }
       ];
-      for (const r of qoldiqRows.rows) {
-        const q = await getStock(r.razmer, r.balon_turi);
-        if (q > 0) {
-          const narx = await getSotishNarx(r.razmer, r.balon_turi);
-          qSheet.addRow({ razmer: r.razmer, balon_turi: r.balon_turi, qoldiq: q, jami: toDollar(q * narx, kurs) });
-        }
+      for (const r of qoldiqRows) {
+        qSheet.addRow({ razmer: r.razmer, balon_turi: r.balon_turi, qoldiq: r.qoldiq, jami: toDollar(Number(r.qoldiq) * Number(r.tan_narx), kurs) });
       }
       // So'ngi chiqimlar (10 ta)
-      const chiqimRows = await pool.query("SELECT id, razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, sana FROM chiqim ORDER BY id DESC LIMIT 10");
+      const chiqimRows = await pool.query("SELECT id, razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 10", [shopId]);
       const cSheet = workbook.addWorksheet("So'ngi chiqimlar");
       cSheet.columns = [
         { header: "ID", key: "id", width: 6 },
@@ -1312,8 +1643,8 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         zaxira_foyda: row.zaxira_foyda != null ? toDollar(row.zaxira_foyda, kurs) : "-"
       }));
       // Bugungi hisobot sheet
-      const bugunChiqim = await pool.query("SELECT * FROM chiqim WHERE sana = CURRENT_DATE");
-      const bugunRabSotuv = await pool.query("SELECT * FROM rabochiy_sotuv WHERE sana = CURRENT_DATE");
+      const bugunChiqim = await pool.query("SELECT * FROM chiqim WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)", [shopId]);
+      const bugunRabSotuv = await pool.query("SELECT * FROM rabochiy_sotuv WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)", [shopId]);
       let bugunNaqdTushum = 0, bugunNaqdFoyda = 0, bugunRabQoshildi = 0, bugunZaxira = 0, bugunEskiFoyda = 0;
       for (const r of bugunChiqim.rows) {
         const rs = (r.rabochiy_olindi || 0) * (r.rabochiy_narxi || 0);
@@ -1333,7 +1664,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       bugunSheet.addRow({ name: "Eski balondan kelgan sof foyda (so'm)", value: formatNumber(bugunEskiFoyda) });
       bugunSheet.addRow({ name: "Jami foyda (so'm)", value: formatNumber(bugunNaqdFoyda + bugunZaxira + bugunEskiFoyda) });
       // So'ngi kirimlar (10 ta)
-      const kirimRows = await pool.query("SELECT id, razmer, balon_turi, soni, umumiy_qiymat, sana FROM kirim ORDER BY id DESC LIMIT 10");
+      const kirimRows = await pool.query("SELECT id, razmer, balon_turi, soni, umumiy_qiymat, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 10", [shopId]);
       const kSheet = workbook.addWorksheet("So'ngi kirimlar");
       kSheet.columns = [
         { header: "ID", key: "id", width: 6 },
@@ -1347,10 +1678,10 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `xisobot_umumiy_${dateStr}.xlsx`));
     } else if (reportType === "chiqim") {
       const { startDate, endDate } = getDateRange(periodType);
-      let query = "SELECT id, razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, rabochiy_olindi, rabochiy_narxi, sana FROM chiqim";
-      const params = [];
+      let query = "SELECT id, razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, rabochiy_olindi, rabochiy_narxi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)";
+      const params = [shopId];
       if (periodType !== "all") {
-        query += " WHERE sana >= $1 AND sana <= $2";
+        query += " AND sana >= $2 AND sana <= $3";
         params.push(startDate, endDate);
       }
       query += " ORDER BY sana DESC, id DESC";
@@ -1378,10 +1709,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       }));
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `chiqim_${periodType}_${dateStr}.xlsx`));
     } else if (reportType === "sklad") {
-      const result = await pool.query(`
-        SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) as kirdi
-        FROM kirim k GROUP BY k.razmer, k.balon_turi ORDER BY k.razmer, k.balon_turi
-      `);
+      const rows = await getSkladRowsWithValuation(shopId);
       const sheet = workbook.addWorksheet("Sklad");
       sheet.columns = [
         { header: "Razmer", key: "razmer", width: 16 },
@@ -1389,26 +1717,30 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         { header: "Kirdi (jami)", key: "kirdi", width: 12 },
         { header: "Sotildi (jami)", key: "sotildi", width: 12 },
         { header: "Qoldiq", key: "qoldiq", width: 10 },
+        { header: "Tan narx ($)", key: "tan_narx", width: 12 },
+        { header: "Sklad tannarxi (Investitsiya) ($)", key: "jami_qiymat", width: 26 },
         { header: "Sotish narxi ($)", key: "sotish_narx", width: 14 },
-        { header: "Jami qiymat ($)", key: "jami_qiymat", width: 14 }
+        { header: "Kutilayotgan foyda ($)", key: "kutilayotgan_foyda", width: 18 }
       ];
-      for (const r of result.rows) {
-        const qoldiq = await getStock(r.razmer, r.balon_turi);
-        const sotildi = Number(r.kirdi) - qoldiq;
-        const sotishNarx = await getSotishNarx(r.razmer, r.balon_turi);
+      for (const r of rows) {
+        const q = Number(r.qoldiq);
+        const tan = Number(r.tan_narx);
+        const sotish = Number(r.sotish_narx);
         sheet.addRow({
           razmer: r.razmer,
           balon_turi: r.balon_turi,
           kirdi: r.kirdi,
-          sotildi,
-          qoldiq,
-          sotish_narx: toDollar(sotishNarx, kurs),
-          jami_qiymat: toDollar(qoldiq * sotishNarx, kurs)
+          sotildi: r.sotildi,
+          qoldiq: q,
+          tan_narx: toDollar(tan, kurs),
+          jami_qiymat: toDollar(q * tan, kurs),
+          sotish_narx: toDollar(sotish, kurs),
+          kutilayotgan_foyda: toDollar(q * (sotish - tan), kurs)
         });
       }
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `sklad_${dateStr}.xlsx`));
     } else if (reportType === "rabochiy") {
-      const result = await pool.query("SELECT id, razmer, balon_turi, soni, narx, holat, sana FROM rabochiy_balon ORDER BY sana DESC, id DESC");
+      const result = await pool.query("SELECT id, razmer, balon_turi, soni, narx, holat, sana FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY sana DESC, id DESC", [shopId]);
       const sheet = workbook.addWorksheet("Rabochiy");
       sheet.columns = [
         { header: "ID", key: "id", width: 8 },
@@ -1425,8 +1757,8 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       const { startDate, endDate } = periodType === "all" ? { startDate: "2000-01-01", endDate: "2099-12-31" } : getDateRange(periodType);
       const result = await pool.query(
         `SELECT id, razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, sana, dollar_kurs, narx_dona 
-         FROM kirim WHERE sana >= $1 AND sana <= $2 ORDER BY sana DESC, id DESC`,
-        [startDate, endDate]
+         FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 AND sana <= $3 ORDER BY sana DESC, id DESC`,
+        [shopId, startDate, endDate]
       );
       const sheet = workbook.addWorksheet("Kirim");
       sheet.columns = [
@@ -1484,7 +1816,7 @@ bot.callbackQuery("excel_kirim_all", async (ctx) => excelWithAnimation(ctx, "Kir
 
 // ROYXAT
 bot.hears("📋 Royxat", async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
+  if (!(await isAdmin(ctx.from.id))) return;
 
   const kb = new InlineKeyboard()
     .text("📏 Razmerlar", "list_sizes").text("🏷 Brendlar", "list_brands").row()
@@ -1503,13 +1835,7 @@ bot.callbackQuery("list_sizes", async (ctx) => {
   }
 
   for (const r of result.rows) {
-    const kb = new InlineKeyboard()
-      .text("✏️ Tahrirlash", `size_edit_${r.id}`)
-      .text("🗑 O'chirish", `size_del_${r.id}`);
-    await ctx.reply(
-      `📏 <b>${r.id}</b>. ${r.name}`,
-      { reply_markup: kb, parse_mode: "HTML" }
-    );
+    await ctx.reply(`📏 <b>${r.id}</b>. ${r.name}`, { parse_mode: "HTML" });
   }
 });
 
@@ -1523,13 +1849,7 @@ bot.callbackQuery("list_brands", async (ctx) => {
   }
 
   for (const r of result.rows) {
-    const kb = new InlineKeyboard()
-      .text("✏️ Tahrirlash", `brand_edit_${r.id}`)
-      .text("🗑 O'chirish", `brand_del_${r.id}`);
-    await ctx.reply(
-      `🏷 <b>${r.id}</b>. ${r.name}`,
-      { reply_markup: kb, parse_mode: "HTML" }
-    );
+    await ctx.reply(`🏷 <b>${r.id}</b>. ${r.name}`, { parse_mode: "HTML" });
   }
 });
 
@@ -1547,7 +1867,7 @@ bot.callbackQuery("add_brand", async (ctx) => {
 
 // RABOCHIY BALON
 bot.hears("🔄 Rabochiy", async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
+  if (!(await isAdmin(ctx.from.id))) return;
 
   const kb = new InlineKeyboard()
     .text("➕ Qo'shish", "rab_add").text("💰 Rabochiy sotuv", "rab_sotuv").row()
@@ -1580,7 +1900,8 @@ function buildRabSavatKeyboard(rows, selectedIds = []) {
 bot.callbackQuery("rab_sotuv", async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.rab_sav_selected = ctx.session.rab_sav_selected || [];
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 ORDER BY id");
+  const shopId = getCurrentShopId(ctx);
+  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
   if (result.rows.length === 0) {
     await ctx.reply("Rabochiy balonlar yo'q, sotish mumkin emas.");
     return;
@@ -1605,7 +1926,8 @@ bot.callbackQuery(/^rab_sav_toggle_(\d+)$/, async (ctx) => {
   } else {
     ctx.session.rab_sav_selected.push(id);
   }
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 ORDER BY id");
+  const shopId = getCurrentShopId(ctx);
+  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
   const kb = buildRabSavatKeyboard(result.rows, ctx.session.rab_sav_selected);
   try {
     await ctx.editMessageReplyMarkup({ reply_markup: kb });
@@ -1691,7 +2013,8 @@ bot.callbackQuery(/^rb_(.+)$/, async (ctx) => {
 
 bot.callbackQuery("rab_list", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 ORDER BY id DESC");
+  const shopId = getCurrentShopId(ctx);
+  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC", [shopId]);
 
   if (result.rows.length === 0) {
     await ctx.reply("Rabochiy balonlar yo'q");
@@ -1708,12 +2031,12 @@ bot.callbackQuery("rab_list", async (ctx) => {
 
 // OLINISH KERAK
 bot.hears("🛒 Olinish kerak", async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
+  if (!(await isAdmin(ctx.from.id))) return;
 
   const kb = new InlineKeyboard()
     .text("➕ Qo'shish", "ol_add").row()
     .text("📋 Ro'yxat", "ol_list").row()
-    .text("🗑 O'chirish", "ol_delete");
+    .text("📊 Talab (sotuvlar)", "ol_talab");
 
   await ctx.reply("🛒 <b>Olinishi kerak</b>", { reply_markup: kb, parse_mode: "HTML" });
 });
@@ -1739,45 +2062,248 @@ bot.callbackQuery(/^ob_(.+)$/, async (ctx) => {
   await ctx.reply("🔢 Nechta kerak?", { reply_markup: backBtn });
 });
 
+// Avtomatik: qoldiq 4 tadan kam bo'lgan pozitsiyalarni olinish_kerak ga qo'shish
+async function syncOlinishKerakFromStock(shopId = 1) {
+  const r = await pool.query(`
+    WITH agg AS (
+      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi
+      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
+    ),
+    outgo AS (
+      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
+      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
+    ),
+    qoldiq AS (
+      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q
+      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
+    ),
+    mavjud AS (
+      SELECT razmer, balon_turi FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1)
+    )
+    SELECT q.razmer, q.balon_turi, q.q FROM qoldiq q
+    LEFT JOIN mavjud m ON q.razmer = m.razmer AND q.balon_turi = m.balon_turi
+    WHERE q.q < 4 AND m.razmer IS NULL
+  `, [shopId]);
+  for (const row of r.rows) {
+    const need = Math.max(1, 4 - row.q);
+    await pool.query(
+      "INSERT INTO olinish_kerak (razmer, balon_turi, soni, shop_id) VALUES ($1, $2, $3, $4)",
+      [row.razmer, row.balon_turi, need, shopId]
+    );
+  }
+}
+
 bot.callbackQuery("ol_list", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM olinish_kerak ORDER BY id");
+  const shopId = getCurrentShopId(ctx);
+  await syncOlinishKerakFromStock(shopId);
+  const result = await pool.query("SELECT * FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
 
   if (result.rows.length === 0) {
-    await ctx.reply("Ro'yxat bo'sh");
+    await ctx.reply("Ro'yxat bo'sh. Qoldiq 4 tadan kam bo'lgan pozitsiyalar avtomatik qo'shiladi.");
     return;
   }
 
   for (const r of result.rows) {
-    const kb = new InlineKeyboard()
-      .text("✏️ Tahrirlash", `ol_edit_${r.id}`)
-      .text("🗑 O'chirish", `ol_del_${r.id}`);
+    const kb = new InlineKeyboard().text("✏️ Tahrirlash", `ol_edit_${r.id}`);
     await ctx.reply(
-      `🛒 <b>${r.id}</b>. ${r.razmer} | ${r.balon_turi} - ${r.soni} ta`,
+      `🛒 <b>${r.id}</b>. ${r.razmer} | ${r.balon_turi} — ${r.soni} ta`,
       { reply_markup: kb, parse_mode: "HTML" }
     );
   }
-});
-
-bot.callbackQuery(/^ol_del_(\d+)$/, async (ctx) => {
-  await ctx.answerCallbackQuery();
-  const id = parseInt(ctx.match[1]);
-  await pool.query("DELETE FROM olinish_kerak WHERE id = $1", [id]);
-  await ctx.reply(`🗑 O'chirildi (ID: ${id})`);
 });
 
 bot.callbackQuery(/^ol_edit_(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const id = parseInt(ctx.match[1]);
   ctx.session.step = "ol_edit";
+  ctx.session.data = ctx.session.data || {};
   ctx.session.data.edit_id = id;
   await ctx.reply("Yangi sonni kiriting:", { reply_markup: backBtn });
+});
+
+// Talab (sotuvlar): olinishi kerak pozitsiyalar bo'yicha qancha va qachon sotilgani
+bot.callbackQuery("ol_talab", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = getCurrentShopId(ctx);
+  await syncOlinishKerakFromStock(shopId);
+  const list = await pool.query("SELECT id, razmer, balon_turi, soni FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
+  if (list.rows.length === 0) {
+    await ctx.reply("Olinishi kerak ro'yxati bo'sh. Talab ko'rsatiladi ro'yxatdagi pozitsiyalar bo'yicha.");
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const day7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const day30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const sold7 = await pool.query(
+    "SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS s FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 GROUP BY razmer, balon_turi",
+    [shopId, day7]
+  );
+  const sold30 = await pool.query(
+    "SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS s FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 GROUP BY razmer, balon_turi",
+    [shopId, day30]
+  );
+  const map7 = {};
+  const map30 = {};
+  for (const r of sold7.rows) map7[`${r.razmer}|${r.balon_turi}`] = Number(r.s);
+  for (const r of sold30.rows) map30[`${r.razmer}|${r.balon_turi}`] = Number(r.s);
+  let msg = "📊 <b>Talab (sotuvlar)</b>\nSo'nggi 7 kun va 30 kun bo'yicha sotilgan dona:\n\n";
+  for (const r of list.rows) {
+    const key = `${r.razmer}|${r.balon_turi}`;
+    const s7 = map7[key] || 0;
+    const s30 = map30[key] || 0;
+    msg += `🛞 ${r.razmer} | ${r.balon_turi}\n   📅 7 kun: <b>${s7}</b> ta  |  30 kun: <b>${s30}</b> ta\n\n`;
+  }
+  msg += `📅 7 kun: ${day7} — ${today}\n📅 30 kun: ${day30} — ${today}`;
+  await ctx.reply(msg, { parse_mode: "HTML" });
+});
+
+// Rasm yuklanganda: Gemini OCR orqali jadval ajratib, natijani konsolga chiqarish
+function downloadTelegramFile(token, filePath) {
+  return new Promise((resolve, reject) => {
+    const url = `https://api.telegram.org/file/bot${token}/${filePath}`;
+    https.get(url, (res) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+// Razmerni 165/70/13 -> 165/70 R13 formatiga (baza uchun)
+function sizeToDbFormat(s) {
+  if (!s || typeof s !== "string") return s;
+  const m = s.trim().match(/(\d{3})[\/\s]*(\d{2})[\/\s]*(\d{2})/);
+  return m ? `${m[1]}/${m[2]} R${m[3]}` : s;
+}
+
+bot.on("message:photo", async (ctx, next) => {
+  const photo = ctx.message.photo;
+  if (!photo || photo.length === 0) return next();
+  const largest = photo[photo.length - 1];
+  const step = ctx.session.step;
+
+  if (step === "kirim_photo") {
+    try {
+      await ctx.reply("🔄 Rasm tahlil qilinmoqda...");
+      const file = await ctx.api.getFile(largest.file_id);
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) {
+        await ctx.reply("❌ Bot token topilmadi.");
+        ctx.session.step = null;
+        return;
+      }
+      const buffer = await downloadTelegramFile(token, file.file_path);
+      const rows = await extractTableFromImage(buffer);
+      if (!rows || rows.length === 0) {
+        await ctx.reply("❌ Jadvalda qator topilmadi. Boshqa rasm yuboring.", { reply_markup: adminMenu });
+        return;
+      }
+      const shopId = getCurrentShopId(ctx);
+      let saved = 0;
+      for (const r of rows) {
+        const razmer = sizeToDbFormat(r.size) || r.size;
+        const balon_turi = (r.brand && String(r.brand).trim()) || "Noma'lum";
+        const soni = Math.max(0, Math.round(Number(r.quantity) || 0));
+        const kelgan_narx = Math.round(Number(r.price) || 0);
+        const sotish_narx = Math.round(Number(r.selling_price) || kelgan_narx + 100000);
+        const umumiy_qiymat = soni * sotish_narx;
+        if (soni < 1) continue;
+        try {
+          await pool.query(
+            `INSERT INTO kirim (razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, dollar_kurs, narx_dona, shop_id) VALUES ($1, $2, $3, $4, $5, $6, 0, $4, $7)`,
+            [razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, shopId]
+          );
+          saved++;
+        } catch (e) {
+          console.error("Kirim OCR qator saqlash xato:", e.message, r);
+        }
+      }
+      ctx.session.step = null;
+      ctx.session.data = {};
+      console.log("=== Rasm orqali kirim saqlandi ===", JSON.stringify(rows, null, 2));
+      await ctx.reply(
+        `✅ <b>Rasm orqali kirim</b>\n\n${saved} ta qator kirim jadvaliga saqlandi.`,
+        { reply_markup: adminMenu, parse_mode: "HTML" }
+      );
+    } catch (err) {
+      console.error("Kirim OCR xato:", err);
+      ctx.session.step = null;
+      await ctx.reply("❌ Rasm tahlil qilishda xato: " + (err.message || String(err)), { reply_markup: adminMenu });
+    }
+    return;
+  }
+
+  try {
+    await ctx.reply("🔄 Rasm tahlil qilinmoqda...");
+    const file = await ctx.api.getFile(largest.file_id);
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+      await ctx.reply("❌ Bot token topilmadi.");
+      return;
+    }
+    const buffer = await downloadTelegramFile(token, file.file_path);
+    const rows = await extractTableFromImage(buffer);
+    console.log("=== Rasm OCR natijasi (JSON) ===");
+    console.log(JSON.stringify(rows, null, 2));
+    console.log("=== Jami qatorlar:", rows.length, "===");
+    await ctx.reply(`✅ Jadvaldan ${rows.length} ta qator ajratildi. Natija konsolga chiqarildi.`);
+  } catch (err) {
+    console.error("OCR xato:", err);
+    await ctx.reply("❌ Rasm tahlil qilishda xato: " + (err.message || String(err)));
+  }
 });
 
 // Universal message:text handler (faqat bitta bo'lishi kerak)
 bot.on("message:text", async (ctx, next) => {
   const text = ctx.message.text;
   const step = ctx.session.step;
+
+  // Boss - yangi do'kon nomi
+  if (step === "boss_new_shop_name" && isBoss(ctx.from.id)) {
+    const name = (text || "").trim();
+    if (!name) {
+      await ctx.reply("❌ Do'kon nomini kiriting");
+      return;
+    }
+    const ins = await pool.query(
+      "INSERT INTO shops (name, phone, address, dollar_kurs, report_daily_time, report_weekly_day) VALUES ($1, '', '', '12800', '21:00', '5') RETURNING id",
+      [name]
+    );
+    const newShopId = ins.rows[0].id;
+    const defaults = [
+      ["shop_name", name], ["phone", ""], ["address", ""], ["dollar_kurs", "12800"],
+      ["report_daily_time", "21:00"], ["report_weekly_day", "5"]
+    ];
+    for (const [k, v] of defaults) {
+      await pool.query(
+        "INSERT INTO shop_settings (shop_id, key, value) VALUES ($1, $2, $3) ON CONFLICT (shop_id, key) DO UPDATE SET value = $3",
+        [newShopId, k, v]
+      );
+    }
+    ctx.session.step = null;
+    await ctx.reply(`✅ Do'kon qo'shildi: "${name}" (ID: ${newShopId})`, { reply_markup: bossMenu });
+    return;
+  }
+  // Boss - admin Telegram ID
+  if (step === "boss_admin_telegram_id" && isBoss(ctx.from.id)) {
+    const tid = parseInt(String(text).replace(/\s/g, ""), 10);
+    if (isNaN(tid) || tid <= 0) {
+      await ctx.reply("❌ To'g'ri Telegram ID kiriting (faqat raqam)");
+      return;
+    }
+    const shopId = ctx.session.data?.boss_shop_id || 1;
+    await pool.query(
+      "INSERT INTO shop_admins (telegram_id, shop_id) VALUES ($1, $2) ON CONFLICT (telegram_id, shop_id) DO NOTHING",
+      [tid, shopId]
+    );
+    const shop = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
+    ctx.session.step = null;
+    ctx.session.data = {};
+    await ctx.reply(`✅ Admin (ID: ${tid}) "${shop.rows[0]?.name || shopId}" do'koniga biriktirildi.`, { reply_markup: bossMenu });
+    return;
+  }
 
   // Sozlamalar - Dollar kursi
   if (step === "settings_dollar") {
@@ -1786,37 +2312,43 @@ bot.on("message:text", async (ctx, next) => {
       await ctx.reply("❌ To'g'ri summani kiriting");
       return;
     }
-    await setDollarKurs(kurs);
+    const shopId = getCurrentShopId(ctx);
+    await setDollarKurs(kurs, shopId);
     ctx.session.step = null;
-    await ctx.reply(`✅ Dollar kursi yangilandi: ${formatNumber(kurs)} so'm`, { reply_markup: adminMenu });
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Dollar kursi yangilandi: ${formatNumber(kurs)} so'm`, { reply_markup: menu });
     return;
   }
   // Sozlamalar - Do'kon nomi
   if (step === "settings_shop_name") {
-    await setSetting("shop_name", text);
+    await setSetting("shop_name", text, getCurrentShopId(ctx));
     ctx.session.step = null;
-    await ctx.reply(`✅ Do'kon nomi yangilandi: ${text}`, { reply_markup: adminMenu });
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Do'kon nomi yangilandi: ${text}`, { reply_markup: menu });
     return;
   }
   // Sozlamalar - Telefon
   if (step === "settings_shop_phone") {
-    await setSetting("phone", text);
+    await setSetting("phone", text, getCurrentShopId(ctx));
     ctx.session.step = null;
-    await ctx.reply(`✅ Telefon yangilandi: ${text}`, { reply_markup: adminMenu });
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Telefon yangilandi: ${text}`, { reply_markup: menu });
     return;
   }
   // Sozlamalar - Manzil
   if (step === "settings_shop_address") {
-    await setSetting("address", text);
+    await setSetting("address", text, getCurrentShopId(ctx));
     ctx.session.step = null;
-    await ctx.reply(`✅ Manzil yangilandi: ${text}`, { reply_markup: adminMenu });
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Manzil yangilandi: ${text}`, { reply_markup: menu });
     return;
   }
   // Sozlamalar - Ish vaqti
   if (step === "settings_shop_hours") {
-    await setSetting("working_hours", text);
+    await setSetting("working_hours", text, getCurrentShopId(ctx));
     ctx.session.step = null;
-    await ctx.reply(`✅ Ish vaqti yangilandi: ${text}`, { reply_markup: adminMenu });
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Ish vaqti yangilandi: ${text}`, { reply_markup: menu });
     return;
   }
   if (step === "report_daily_time") {
@@ -1825,9 +2357,10 @@ bot.on("message:text", async (ctx, next) => {
       await ctx.reply("❌ Format: SS:MM (masalan: 21:00)");
       return;
     }
-    await setSetting("report_daily_time", trimmed);
+    await setSetting("report_daily_time", trimmed, getCurrentShopId(ctx));
     ctx.session.step = null;
-    await ctx.reply(`✅ Kunlik hisobot vaqti: ${trimmed}`, { reply_markup: adminMenu });
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Kunlik hisobot vaqti: ${trimmed}`, { reply_markup: menu });
     return;
   }
   if (step === "report_weekly_day") {
@@ -1836,10 +2369,61 @@ bot.on("message:text", async (ctx, next) => {
       await ctx.reply("❌ 0–6 orasida kiriting (0=Yakshanba, 5=Juma)");
       return;
     }
-    await setSetting("report_weekly_day", String(d));
+    await setSetting("report_weekly_day", String(d), getCurrentShopId(ctx));
     ctx.session.step = null;
     const days = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
-    await ctx.reply(`✅ Haftalik hisobot kuni: ${days[d]}`, { reply_markup: adminMenu });
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Haftalik hisobot kuni: ${days[d]}`, { reply_markup: menu });
+    return;
+  }
+
+  // Olinishi kerak — soni kiritilganda (qo'shish)
+  if (step === "ol_soni") {
+    const soni = parseInt(String(text).replace(/\s/g, ""), 10);
+    if (isNaN(soni) || soni < 1) {
+      await ctx.reply("❌ Musbat son kiriting (nechta kerak)");
+      return;
+    }
+    const shopId = getCurrentShopId(ctx);
+    const { razmer, balon_turi } = ctx.session.data || {};
+    if (!razmer || !balon_turi) {
+      await ctx.reply("❌ Sessiya tugadi. Qaytadan Olinishi kerak → Qo'shish.");
+      ctx.session.step = null;
+      ctx.session.data = {};
+      return;
+    }
+    await pool.query(
+      "INSERT INTO olinish_kerak (razmer, balon_turi, soni, shop_id) VALUES ($1, $2, $3, $4)",
+      [razmer, balon_turi, soni, shopId]
+    );
+    ctx.session.step = null;
+    ctx.session.data = {};
+    await ctx.reply(`✅ Olinishi kerak qo'shildi: ${razmer} | ${balon_turi} — ${soni} ta`, { reply_markup: adminMenu });
+    return;
+  }
+
+  // Olinishi kerak — tahrirlash (yangi soni)
+  if (step === "ol_edit") {
+    const soni = parseInt(String(text).replace(/\s/g, ""), 10);
+    if (isNaN(soni) || soni < 1) {
+      await ctx.reply("❌ Musbat son kiriting");
+      return;
+    }
+    const id = ctx.session.data?.edit_id;
+    if (!id) {
+      await ctx.reply("❌ Sessiya tugadi. Ro'yxatdan qayta tahrirlashni tanlang.");
+      ctx.session.step = null;
+      ctx.session.data = {};
+      return;
+    }
+    const res = await pool.query("UPDATE olinish_kerak SET soni = $1 WHERE id = $2", [soni, id]);
+    ctx.session.step = null;
+    ctx.session.data = {};
+    if (res.rowCount === 0) {
+      await ctx.reply("❌ Bunday yozuv topilmadi.");
+    } else {
+      await ctx.reply(`✏️ Tahrirlandi: olinishi kerak ID ${id} — ${soni} ta`, { reply_markup: adminMenu });
+    }
     return;
   }
 
@@ -1864,38 +2448,81 @@ bot.on("message:text", async (ctx, next) => {
   }
   // Tahrirlash uchun maydon nomi kiritish
   if (step === "editdel_field") {
-    ctx.session.data.editdel_field = text.trim();
+    ctx.session.data = ctx.session.data || {};
+    const field = text.trim().toLowerCase();
+    const allowedFields = ["name", "soni", "sotildi", "umumiy_qiymat", "foyda", "naqd_foyda", "zaxira_foyda", "rabochiy_olindi", "rabochiy_narxi", "kelgan_narx", "sotish_narx", "narx", "sana", "razmer", "balon_turi"];
+    if (!allowedFields.includes(field)) {
+      await ctx.reply("❌ Noma'lum maydon. Ruxsat etilgan: " + allowedFields.join(", "));
+      return;
+    }
+    ctx.session.data.editdel_field = field;
     ctx.session.step = "editdel_value";
     await ctx.reply("Yangi qiymatni kiriting:", { reply_markup: backBtn });
     return;
   }
   // Tahrirlash uchun yangi qiymat kiritish
   if (step === "editdel_value") {
+    ctx.session.data = ctx.session.data || {};
     const table = ctx.session.data.editdel_table;
     const id = ctx.session.data.editdel_id;
     const field = ctx.session.data.editdel_field;
+    const valueInDollar = ctx.session.data.editdel_value_dollar === true;
+    if (!table || id == null) {
+      await ctx.reply("❌ Sessiya tugadi. Sozlamalar → O'chirish/tahrirlash dan qaytadan boshlang.");
+      ctx.session.step = null;
+      ctx.session.data = {};
+      return;
+    }
     let value = text;
-    if (["soni","sotildi","umumiy_qiymat","foyda","naqd_foyda","zaxira_foyda","rabochiy_olindi","rabochiy_narxi","kelgan_narx","sotish_narx","narx"].includes(field)) {
-      value = parseInt(text);
+    if (valueInDollar && (field === "kelgan_narx" || field === "sotish_narx")) {
+      const dollarNum = parseFloat(text.replace(/\s/g, "").replace(",", "."));
+      if (isNaN(dollarNum) || dollarNum < 0) {
+        await ctx.reply("❌ To'g'ri summa kiriting (dollar, masalan: 32 yoki 32.5)");
+        return;
+      }
+      const shopId = getCurrentShopId(ctx);
+      const kurs = parseInt(await getSetting("dollar_kurs", shopId)) || 1;
+      value = Math.round(dollarNum * kurs);
+    } else if (["soni", "sotildi", "umumiy_qiymat", "foyda", "naqd_foyda", "zaxira_foyda", "rabochiy_olindi", "rabochiy_narxi", "kelgan_narx", "sotish_narx", "narx"].includes(field)) {
+      value = parseInt(text.replace(/\s/g, ""), 10);
       if (isNaN(value)) {
         await ctx.reply("❌ To'g'ri son kiriting");
         return;
       }
     } else if (field === "sana") {
-      if (!/\d{4}-\d{2}-\d{2}/.test(text)) {
+      if (!/\d{4}-\d{2}-\d{2}/.test(text.trim())) {
         await ctx.reply("❌ Sana YYYY-MM-DD formatda bo'lishi kerak");
         return;
       }
+      value = text.trim();
+    } else {
+      value = text.trim();
     }
+    // Kirim jadvalida "narx" ustuni yo'q — kelgan_narx (tan narx) ga yo'naltiramiz
+    const fieldMap = {
+      kirim: { narx: "kelgan_narx" },
+      chiqim: {},
+      olinish_kerak: {},
+      sizes: {},
+      brands: {}
+    };
+    const resolvedField = (fieldMap[table] && fieldMap[table][field]) ? fieldMap[table][field] : field;
     try {
-      const res = await pool.query(`UPDATE ${table} SET ${field} = $1 WHERE id = $2`, [value, id]);
+      const quotedField = `"${String(resolvedField).replace(/"/g, '""')}"`;
+      const res = await pool.query(`UPDATE ${table} SET ${quotedField} = $1 WHERE id = $2`, [value, id]);
       if (res.rowCount === 0) {
         await ctx.reply("❌ Bunday ID topilmadi yoki tahrirlanmadi");
       } else {
-        await ctx.reply(`✏️ Tahrirlandi: ${table} (ID: ${id})`, { reply_markup: adminMenu });
+        if (table === "kirim" && resolvedField === "sotish_narx") {
+          await pool.query("UPDATE kirim SET umumiy_qiymat = soni * sotish_narx WHERE id = $1", [id]);
+        }
+        const msg = valueInDollar && (field === "kelgan_narx" || field === "sotish_narx")
+          ? `✏️ Tahrirlandi: ${resolvedField} = ${formatNumber(value)} so'm`
+          : `✏️ Tahrirlandi: ${table} (ID: ${id})`;
+        await ctx.reply(msg, { reply_markup: adminMenu });
       }
     } catch (e) {
-      await ctx.reply("❌ Tahrirlashda xatolik: " + e.message);
+      await ctx.reply("❌ Tahrirlashda xatolik: " + (e.message || e));
     }
     ctx.session.step = null;
     ctx.session.data = {};
@@ -2032,7 +2659,7 @@ bot.on("message:text", async (ctx, next) => {
     await ctx.reply("📊 Holatini tanlang:", { reply_markup: kb });
     return;
   }
-  // Chiqim - rabochiy yangi razmer (boshqa razmer tanlansa)
+  // Chiqim - rabochiy yangi razmer (o'zi kiritadi)
   if (step === "chiqim_rab_razmer_new") {
     const raz = text.trim();
     if (!raz) {
@@ -2040,13 +2667,11 @@ bot.on("message:text", async (ctx, next) => {
       return;
     }
     ctx.session.data.rabochiy_razmer = raz;
-    ctx.session.step = "chiqim_rab_brand";
-    const kb = await brandKeyboard("cr_rb");
-    kb.text("✏️ Yangi brend", "cr_rb_new");
-    await ctx.reply("🏷 Rabochiy balon brendini tanlang:", { reply_markup: kb });
+    ctx.session.step = "chiqim_rab_brand_input";
+    await ctx.reply("🏷 Balon (brend) nomini kiriting:", { reply_markup: backBtn });
     return;
   }
-  // Chiqim - rabochiy yangi brend
+  // Chiqim - rabochiy yangi brend (cr_rb_new orqali kelsa)
   if (step === "chiqim_rab_brand_new") {
     const brand = text.trim();
     if (!brand) {
@@ -2069,11 +2694,23 @@ bot.on("message:text", async (ctx, next) => {
     const { razmer, balon_turi } = ctx.session.data;
     const kb = new InlineKeyboard()
       .text("Sotilgan balon razmerida", "cr_rab_same")
-      .text("Boshqa razmer", "cr_rab_other");
+      .text("Razmerni o'zim kiritaman", "cr_rab_other");
     await ctx.reply(
-      `✅ ${soni} ta rabochiy.\n\nRabochiy balon razmeri sotilgan balon (${razmer} | ${balon_turi}) razmerida yoki boshqa?`,
+      `✅ ${soni} ta rabochiy.\n\n📏 Rabochiy balon razmeri: sotilgan (${razmer}) razmerida yoki o'zingiz yozasiz?`,
       { reply_markup: kb }
     );
+    return;
+  }
+  // Chiqim - rabochiy balon nomi (brend) — foydalanuvchi o'zi yozadi
+  if (step === "chiqim_rab_brand_input") {
+    const name = text.trim();
+    if (!name) {
+      await ctx.reply("❌ Balon (brend) nomini kiriting");
+      return;
+    }
+    ctx.session.data.rabochiy_balon_turi = name;
+    ctx.session.step = "chiqim_rab_narx";
+    await ctx.reply("💵 Rabochiy balon narxini kiriting (1 dona, so'm):", { reply_markup: backBtn });
     return;
   }
   // Chiqim - rabochiy narx (keyin holat so'raladi)
@@ -2106,10 +2743,11 @@ bot.on("message:text", async (ctx, next) => {
     }
     const totalOlingan = rab_sav_rows.reduce((s, r) => s + Number(r.narx), 0);
     const sotilganPerItem = Math.round(sotilganSumma / rab_sav_rows.length);
+    const shopId = getCurrentShopId(ctx);
     for (const row of rab_sav_rows) {
       await pool.query(
-        "INSERT INTO rabochiy_sotuv (rabochiy_balon_id, razmer, balon_turi, olingan_narx, sotilgan_narx) VALUES ($1, $2, $3, $4, $5)",
-        [row.id, row.razmer, row.balon_turi, row.narx, sotilganPerItem]
+        "INSERT INTO rabochiy_sotuv (rabochiy_balon_id, razmer, balon_turi, olingan_narx, sotilgan_narx, shop_id) VALUES ($1, $2, $3, $4, $5, $6)",
+        [row.id, row.razmer, row.balon_turi, row.narx, sotilganPerItem, shopId]
       );
     }
     const placeholders = rab_sav_ids.map((_, i) => `$${i + 1}`).join(", ");
@@ -2135,10 +2773,11 @@ bot.callbackQuery(/^rh_(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const holat = ctx.match[1];
   const { razmer, balon_turi, soni, narx } = ctx.session.data;
+  const shopId = getCurrentShopId(ctx);
 
   const res = await pool.query(
-    "INSERT INTO rabochiy_balon (razmer, balon_turi, soni, narx, holat) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-    [razmer, balon_turi, soni, narx, holat]
+    "INSERT INTO rabochiy_balon (razmer, balon_turi, soni, narx, holat, shop_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+    [razmer, balon_turi, soni, narx, holat, shopId]
   );
   const newId = res.rows[0]?.id;
 
@@ -2146,13 +2785,14 @@ bot.callbackQuery(/^rh_(.+)$/, async (ctx) => {
   ctx.session.data = {};
 
   const holatText = holat === 'yaxshi' ? '✅ Yaxshi' : holat === 'orta' ? '🟡 O\'rta' : '🔴 Past';
+  const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
   await ctx.reply(
     `✅ <b>Rabochiy balon qo'shildi!</b>\n\n` +
     `🔑 <b>ID: ${newId}</b> — bu raqamni balonga yozib qo'ying (shu ID bo'yicha qaysi balon sotilgani va necha pulga olib qolingani aniq bo'ladi).\n\n` +
     `🛞 ${razmer} | ${balon_turi}\n` +
     `📦 ${soni} ta x ${formatNumber(narx)} so'm\n` +
     `📊 Holat: ${holatText}`,
-    { reply_markup: adminMenu, parse_mode: "HTML" }
+    { reply_markup: menu, parse_mode: "HTML" }
   );
 });
 
@@ -2173,37 +2813,32 @@ bot.callbackQuery("rab_no", async (ctx) => {
   await saveChiqim(ctx);
 });
 
-// Rabochiy razmer: sotilgan balon razmerida
+// Rabochiy razmer: sotilgan balon razmerida — keyin brend nomini o'zi yozadi
 bot.callbackQuery("cr_rab_same", async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.data.rabochiy_razmer = ctx.session.data.razmer;
-  ctx.session.data.rabochiy_balon_turi = ctx.session.data.balon_turi;
-  ctx.session.step = "chiqim_rab_narx";
-  await ctx.reply("💵 Rabochiy balon narxini kiriting (1 dona, so'm):", { reply_markup: backBtn });
+  ctx.session.step = "chiqim_rab_brand_input";
+  await ctx.reply("🏷 Balon (brend) nomini kiriting:", { reply_markup: backBtn });
 });
 
-// Rabochiy razmer: boshqa razmer tanlash
+// Rabochiy razmer: foydalanuvchi o'zi yozadi, keyin brend nomini ham o'zi yozadi
 bot.callbackQuery("cr_rab_other", async (ctx) => {
   await ctx.answerCallbackQuery();
-  ctx.session.step = "chiqim_rab_razmer";
-  const kb = await sizeKeyboard("cr_rs");
-  kb.text("✏️ Yangi razmer", "cr_rs_new");
-  await ctx.reply("📏 Rabochiy balon razmerini tanlang:", { reply_markup: kb });
+  ctx.session.step = "chiqim_rab_razmer_new";
+  await ctx.reply("📏 Razmerni yozing (masalan: 205/55 R16 yoki 165/70/13):", { reply_markup: backBtn });
 });
 
 bot.callbackQuery(/^cr_rs_(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.data.rabochiy_razmer = ctx.match[1];
-  ctx.session.step = "chiqim_rab_brand";
-  const kb = await brandKeyboard("cr_rb");
-  kb.text("✏️ Yangi brend", "cr_rb_new");
-  await ctx.reply("🏷 Rabochiy balon brendini tanlang:", { reply_markup: kb });
+  ctx.session.step = "chiqim_rab_brand_input";
+  await ctx.reply("🏷 Balon (brend) nomini kiriting:", { reply_markup: backBtn });
 });
 
 bot.callbackQuery("cr_rs_new", async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.step = "chiqim_rab_razmer_new";
-  await ctx.reply("Yangi razmerni kiriting (masalan: 205/55 R16):", { reply_markup: backBtn });
+  await ctx.reply("📏 Razmerni yozing (masalan: 205/55 R16):", { reply_markup: backBtn });
 });
 
 bot.callbackQuery(/^cr_rb_(.+)$/, async (ctx) => {
@@ -2216,7 +2851,7 @@ bot.callbackQuery(/^cr_rb_(.+)$/, async (ctx) => {
 bot.callbackQuery("cr_rb_new", async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.step = "chiqim_rab_brand_new";
-  await ctx.reply("Yangi brend nomini kiriting:", { reply_markup: backBtn });
+  await ctx.reply("🏷 Balon (brend) nomini kiriting:", { reply_markup: backBtn });
 });
 
 // Rabochiy holat (chiqimdan qo'shilganda)
@@ -2228,21 +2863,22 @@ bot.callbackQuery(/^cr_holat_(yaxshi|orta|past)$/, async (ctx) => {
 
 async function saveChiqim(ctx) {
   const { razmer, balon_turi, sotildi, umumiy, rabochiy_soni, rabochiy_narx, rabochiy_razmer, rabochiy_balon_turi, rabochiy_holat } = ctx.session.data;
+  const shopId = getCurrentShopId(ctx);
 
   // Naqd Foyda (NF): (Klientdan olingan naqd) - (Sotilgan yangi balonning tannarxi)
   // Zaxira Foyda (ZF): Klientdan olingan rabochiy balonning baholangan narxi
   // Umumiy Foyda (UF): NF + ZF
   const rabochiySumma = (rabochiy_soni || 0) * (rabochiy_narx || 0);
   const naqdTushum = umumiy - rabochiySumma; // Kassaga kirgan real naqd
-  const xarajat = (await getKelganNarx(razmer, balon_turi)) * sotildi;
+  const xarajat = (await getKelganNarx(razmer, balon_turi, shopId)) * sotildi;
   const naqdFoyda = Math.round(naqdTushum - xarajat);
   const zaxiraFoyda = rabochiySumma;
   const foyda = naqdFoyda + zaxiraFoyda;
 
   await pool.query(
-    `INSERT INTO chiqim (razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, rabochiy_olindi, rabochiy_narxi) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [razmer, balon_turi, sotildi, umumiy, foyda, naqdFoyda, zaxiraFoyda, rabochiy_soni || 0, rabochiy_narx || 0]
+    `INSERT INTO chiqim (razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, rabochiy_olindi, rabochiy_narxi, shop_id) 
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [razmer, balon_turi, sotildi, umumiy, foyda, naqdFoyda, zaxiraFoyda, rabochiy_soni || 0, rabochiy_narx || 0, shopId]
   );
 
   // Rabochiy omborda saqlash — har bitta uchun alohida qator (razmer/brend/holat admin kiritgan)
@@ -2251,8 +2887,8 @@ async function saveChiqim(ctx) {
     const holat = rabochiy_holat || "yaxshi";
     for (let i = 0; i < rabochiy_soni; i++) {
       const r = await pool.query(
-        "INSERT INTO rabochiy_balon (razmer, balon_turi, soni, narx, holat) VALUES ($1, $2, 1, $3, $4) RETURNING id",
-        [rabochiy_razmer, rabochiy_balon_turi, rabochiy_narx, holat]
+        "INSERT INTO rabochiy_balon (razmer, balon_turi, soni, narx, holat, shop_id) VALUES ($1, $2, 1, $3, $4, $5) RETURNING id",
+        [rabochiy_razmer, rabochiy_balon_turi, rabochiy_narx, holat, shopId]
       );
       rabIds.push(r.rows[0].id);
     }
@@ -2260,6 +2896,8 @@ async function saveChiqim(ctx) {
 
   ctx.session.step = null;
   ctx.session.data = {};
+
+  await syncOlinishKerakFromStock(shopId);
 
   let msg = `✅ <b>Sotuv saqlandi!</b>\n━━━━━━━━━━━━━━━━━━\n\n` +
     `🛞 ${razmer} | ${balon_turi}\n` +
@@ -2278,24 +2916,26 @@ async function saveChiqim(ctx) {
 }
 
 // Eski (Rabochiy) balonlar ombori qiymati va soni
-async function getRabochiyOmborValue() {
+async function getRabochiyOmborValue(shopId = 1) {
   const r = await pool.query(
-    "SELECT COALESCE(SUM(soni), 0) as soni, COALESCE(SUM(soni * narx), 0) as summa FROM rabochiy_balon WHERE soni > 0"
+    "SELECT COALESCE(SUM(soni), 0) as soni, COALESCE(SUM(soni * narx), 0) as summa FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1)",
+    [shopId]
   );
   return { soni: Number(r.rows[0].soni), summa: Number(r.rows[0].summa) };
 }
 
-// Davriy hisobot matnini generatsiya qilish (KUNLIK yoki HAFTALIK)
-async function buildReportText(periodType, startDate, endDate) {
+// Davriy hisobot matnini generatsiya qilish (KUNLIK yoki HAFTALIK) — tannarx mantiqi
+async function buildReportText(periodType, startDate, endDate, shopId = 1) {
   const chiqimRows = await pool.query(
-    "SELECT * FROM chiqim WHERE sana >= $1 AND sana <= $2",
-    [startDate, endDate]
+    "SELECT * FROM chiqim WHERE sana >= $1 AND sana <= $2 AND (shop_id IS NULL OR shop_id = $3)",
+    [startDate, endDate, shopId]
   );
   const rabSotuvRows = await pool.query(
-    "SELECT * FROM rabochiy_sotuv WHERE sana >= $1 AND sana <= $2",
-    [startDate, endDate]
+    "SELECT * FROM rabochiy_sotuv WHERE sana >= $1 AND sana <= $2 AND (shop_id IS NULL OR shop_id = $3)",
+    [startDate, endDate, shopId]
   );
-  const rabOmbor = await getRabochiyOmborValue();
+  const rabOmbor = await getRabochiyOmborValue(shopId);
+  const skladVal = await getSkladValuationByTannarx(shopId);
 
   let naqdTushum = 0, naqdFoyda = 0, zaxiraFoyda = 0;
   for (const r of chiqimRows.rows) {
@@ -2319,6 +2959,8 @@ async function buildReportText(periodType, startDate, endDate) {
     `-------------------------\n` +
     `💵 Jami Naqd Tushum: ${formatNumber(naqdTushum)} so'm\n` +
     `💰 Sof Naqd Foyda: ${formatNumber(naqdFoyda)} so'm\n` +
+    `💵 Investitsiya (Skladdagi pulingiz): ${formatNumber(skladVal.investitsiya)} so'm\n` +
+    `📈 Kutilayotgan sof foyda: ${formatNumber(skladVal.kutilayotganFoyda)} so'm\n` +
     `🛞 Ombordagi Eski Balonlar Qiymati: ${formatNumber(rabOmbor.summa)} so'm\n` +
     `🔄 Eski Balon Sotuvidan Sof Foyda: ${formatNumber(korrektirovka)} so'm\n` +
     `📈 UMUMIY FOYDA (Real + Zaxira): ${formatNumber(jami)} so'm\n` +
@@ -2328,12 +2970,13 @@ async function buildReportText(periodType, startDate, endDate) {
 }
 
 bot.hears("⚙️ Sozlamalar", async (ctx) => {
-  if (!isAdmin(ctx.from.id)) return;
-  const shopName = await getSetting("shop_name");
-  const phone = await getSetting("phone");
-  const address = await getSetting("address");
-  const dollarKurs = await getSetting("dollar_kurs");
-  const workingHours = await getSetting("working_hours");
+  if (!(await isAdmin(ctx.from.id))) return;
+  const shopId = getCurrentShopId(ctx);
+  const shopName = await getSetting("shop_name", shopId);
+  const phone = await getSetting("phone", shopId);
+  const address = await getSetting("address", shopId);
+  const dollarKurs = await getSetting("dollar_kurs", shopId);
+  const workingHours = await getSetting("working_hours", shopId);
 
   const infoText =
     `⚙️ <b>Sozlamalar bo'limi</b>\n\n` +
@@ -2355,8 +2998,9 @@ bot.hears("⚙️ Sozlamalar", async (ctx) => {
 // Hisobotlarni boshqarish
 bot.callbackQuery("settings_reports", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const dailyTime = await getSetting("report_daily_time") || "21:00";
-  const weeklyDay = await getSetting("report_weekly_day") || "5";
+  const shopId = getCurrentShopId(ctx);
+  const dailyTime = await getSetting("report_daily_time", shopId) || "21:00";
+  const weeklyDay = await getSetting("report_weekly_day", shopId) || "5";
   const dayNames = ["Yakshanba", "Dushanba", "Seshanba", "Chorshanba", "Payshanba", "Juma", "Shanba"];
   const kb = new InlineKeyboard()
     .text("🕐 Kunlik hisobot vaqti", "report_set_daily").row()
@@ -2388,13 +3032,15 @@ bot.callbackQuery("settings_back", async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.step = null;
   ctx.session.data = ctx.session.data || {};
-  await ctx.reply("Bosh menyu", { reply_markup: adminMenu });
+  const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+  await ctx.reply("Bosh menyu", { reply_markup: menu });
 });
 
 // Dollar kursi o'zgartirish
 bot.callbackQuery("settings_dollar", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const currentKurs = await getSetting("dollar_kurs");
+  const shopId = getCurrentShopId(ctx);
+  const currentKurs = await getSetting("dollar_kurs", shopId);
   ctx.session.step = "settings_dollar";
   await ctx.reply(
     `💵 <b>Dollar kursi o'zgartirish</b>\n\n` +
@@ -2406,11 +3052,12 @@ bot.callbackQuery("settings_dollar", async (ctx) => {
 
 // Sozlamalar asosiy ekranini qayta ko'rsatish
 async function showSettingsMenu(ctx) {
-  const shopName = await getSetting("shop_name");
-  const phone = await getSetting("phone");
-  const address = await getSetting("address");
-  const dollarKurs = await getSetting("dollar_kurs");
-  const workingHours = await getSetting("working_hours");
+  const shopId = getCurrentShopId(ctx);
+  const shopName = await getSetting("shop_name", shopId);
+  const phone = await getSetting("phone", shopId);
+  const address = await getSetting("address", shopId);
+  const dollarKurs = await getSetting("dollar_kurs", shopId);
+  const workingHours = await getSetting("working_hours", shopId);
   const infoText =
     `⚙️ <b>Sozlamalar bo'limi</b>\n\n` +
     `📋 <b>Joriy sozlamalar:</b>\n` +
@@ -2506,8 +3153,38 @@ bot.callbackQuery("editdel_del", async (ctx) => {
 
 bot.callbackQuery("editdel_edit", async (ctx) => {
   await ctx.answerCallbackQuery();
+  ctx.session.data = ctx.session.data || {};
+  const table = ctx.session.data.editdel_table;
+  const id = ctx.session.data.editdel_id;
+  if (table === "kirim") {
+    ctx.session.step = "editdel_field";
+    const kb = new InlineKeyboard()
+      .text("💵 Kelgan narx ($)", "editdel_f_kelgan_narx").text("💰 Sotish narx ($)", "editdel_f_sotish_narx").row()
+      .text("🔢 Soni", "editdel_f_soni").text("📅 Sana", "editdel_f_sana").row()
+      .text("📏 Razmer", "editdel_f_razmer").text("🏷 Brend", "editdel_f_balon_turi").row()
+      .text("🔙 Orqaga", "settings_editdel");
+    await ctx.reply(`ID: <b>${id}</b> (kirim) – qaysi maydonni tahrirlaysiz?\n\n💲 Kelgan narx va Sotish narxni <b>dollar ($)</b> da kiriting.`, { reply_markup: kb, parse_mode: "HTML" });
+    return;
+  }
   ctx.session.step = "editdel_field";
   await ctx.reply("Qaysi maydonni tahrirlaysiz? (maydon nomini yozing, masalan: soni, narx, sana, name, ...)", { reply_markup: backBtn });
+});
+
+// Kirim (va boshqa) jadvalda maydonni tugma orqali tanlash
+bot.callbackQuery(/^editdel_f_(.+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const field = ctx.match[1];
+  ctx.session.data = ctx.session.data || {};
+  ctx.session.data.editdel_field = field;
+  const dollarFields = ["kelgan_narx", "sotish_narx"];
+  if (dollarFields.includes(field)) {
+    ctx.session.data.editdel_value_dollar = true;
+    await ctx.reply("Yangi qiymatni kiriting (dollar, $):", { reply_markup: backBtn });
+  } else {
+    ctx.session.data.editdel_value_dollar = false;
+    await ctx.reply("Yangi qiymatni kiriting:", { reply_markup: backBtn });
+  }
+  ctx.session.step = "editdel_value";
 });
 
 bot.callbackQuery(/^editdel_(kirim|chiqim|ol|size|brand)$/, async (ctx) => {
@@ -2527,53 +3204,89 @@ bot.callbackQuery(/^editdel_(kirim|chiqim|ol|size|brand)$/, async (ctx) => {
 });
 
 // ==================== AVTOMATIK HISOBOT (CRON) ====================
-let lastDailyReportDate = null;
-let lastWeeklyReportWeek = null;
+const lastDailyByShop = {};
+const lastWeeklyByShop = {};
+const lastScheduledErrorLog = { msg: "", at: 0 };
+const SCHEDULED_ERROR_LOG_INTERVAL_MS = 5 * 60 * 1000; // bir xil xato 5 daqiqada 1 marta
+
+function isRetryableNetworkError(e) {
+  const code = e?.code || e?.errno;
+  return code === "EAI_AGAIN" || code === "ECONNRESET" || code === "ETIMEDOUT" || code === "ENOTFOUND" || e?.message?.includes("getaddrinfo");
+}
+
+async function withRetry(fn, maxAttempts = 3) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt === maxAttempts || !isRetryableNetworkError(e)) throw e;
+      const delayMs = attempt * 2000;
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+}
 
 async function sendScheduledReports() {
-  const adminIds = (process.env.ADMIN_IDS || "").split(",").map(id => parseInt(id.trim())).filter(Boolean);
-  if (adminIds.length === 0) return;
-
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
   const timeStr = `${String(currentHour).padStart(2, "0")}:${String(currentMinute).padStart(2, "0")}`;
-  const dailyTime = await getSetting("report_daily_time") || "21:00";
-  const weeklyDay = parseInt(await getSetting("report_weekly_day") || "5");
-
   const todayStr = now.toISOString().slice(0, 10);
   const weekKey = `${now.getFullYear()}-W${Math.ceil(now.getDate() / 7)}`;
 
   try {
-    if (timeStr === dailyTime) {
-      if (lastDailyReportDate !== todayStr) {
-        const { startDate, endDate } = getDateRange("day");
-        const text = await buildReportText("day", startDate, endDate);
+    await withRetry(async () => {
+    const shops = await pool.query("SELECT id FROM shops ORDER BY id");
+    for (const row of shops.rows) {
+      const shopId = row.id;
+      const dailyTime = await getSetting("report_daily_time", shopId) || "21:00";
+      const weeklyDay = parseInt(await getSetting("report_weekly_day", shopId) || "5");
+      const adminRows = await pool.query("SELECT telegram_id FROM shop_admins WHERE shop_id = $1", [shopId]);
+      let adminIds = adminRows.rows.map((r) => Number(r.telegram_id));
+      if (!adminIds.includes(BOSS_ADMIN_TELEGRAM_ID)) adminIds = [...adminIds, BOSS_ADMIN_TELEGRAM_ID];
+      if (adminIds.length === 0) continue;
+
+      if (timeStr === dailyTime) {
+        if (lastDailyByShop[shopId] !== todayStr) {
+          const { startDate, endDate } = getDateRange("day");
+          const text = await buildReportText("day", startDate, endDate, shopId);
+          const shopName = (await pool.query("SELECT name FROM shops WHERE id = $1", [shopId])).rows[0]?.name || "Do'kon";
+          const header = `🏪 <b>${shopName}</b>\n\n`;
+          for (const chatId of adminIds) {
+            try {
+              await bot.api.sendMessage(chatId, header + text, { parse_mode: "HTML" });
+            } catch (e) {
+              console.warn("Report send error:", e.message);
+            }
+          }
+          lastDailyByShop[shopId] = todayStr;
+        }
+      }
+
+      if (timeStr === dailyTime && now.getDay() === weeklyDay && lastWeeklyByShop[shopId] !== weekKey) {
+        const { startDate, endDate } = getDateRange("week");
+        const text = await buildReportText("week", startDate, endDate, shopId);
+        const shopName = (await pool.query("SELECT name FROM shops WHERE id = $1", [shopId])).rows[0]?.name || "Do'kon";
+        const header = `🏪 <b>${shopName}</b> (haftalik)\n\n`;
         for (const chatId of adminIds) {
           try {
-            await bot.api.sendMessage(chatId, text, { parse_mode: "HTML" });
+            await bot.api.sendMessage(chatId, header + text, { parse_mode: "HTML" });
           } catch (e) {
-            console.warn("Report send error:", e.message);
+            console.warn("Weekly report send error:", e.message);
           }
         }
-        lastDailyReportDate = todayStr;
+        lastWeeklyByShop[shopId] = weekKey;
       }
     }
-
-    if (timeStr === dailyTime && now.getDay() === weeklyDay && lastWeeklyReportWeek !== weekKey) {
-      const { startDate, endDate } = getDateRange("week");
-      const text = await buildReportText("week", startDate, endDate);
-      for (const chatId of adminIds) {
-        try {
-          await bot.api.sendMessage(chatId, text, { parse_mode: "HTML" });
-        } catch (e) {
-          console.warn("Weekly report send error:", e.message);
-        }
-      }
-      lastWeeklyReportWeek = weekKey;
-    }
+    });
   } catch (e) {
-    console.error("Scheduled report error:", e);
+    const msg = e?.message || String(e);
+    const now = Date.now();
+    if (msg !== lastScheduledErrorLog.msg || now - lastScheduledErrorLog.at > SCHEDULED_ERROR_LOG_INTERVAL_MS) {
+      lastScheduledErrorLog.msg = msg;
+      lastScheduledErrorLog.at = now;
+      console.error("Scheduled report error:", msg);
+    }
   }
 }
 
@@ -2589,6 +3302,8 @@ async function main() {
   await initDB();
   await ensureChiqimFoydaColumns();
   await ensureRabochiySotuvTable();
+  await ensureShopsAndAdmins();
+  await ensureIndexes();
   console.log("🚀 Bot ishga tushdi...");
   const res = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
   console.log("Mavjud jadvallar:", res.rows.map(r => r.table_name));
