@@ -328,12 +328,12 @@ function getCurrentShopId(ctx) {
 }
 
 async function getAllSizes() {
-  const result = await pool.query("SELECT name FROM sizes ORDER BY name");
+  const result = await pool.query("SELECT name FROM sizes ORDER BY id");
   return result.rows.map(r => r.name);
 }
 
 async function getAllBrands() {
-  const result = await pool.query("SELECT name FROM brands ORDER BY name");
+  const result = await pool.query("SELECT name FROM brands ORDER BY id");
   return result.rows.map(r => r.name);
 }
 
@@ -1179,17 +1179,33 @@ bot.callbackQuery("kirim_new", async (ctx) => {
   ctx.session.step = "kirim_size";
   ctx.session.data = {};
   await ctx.api.sendChatAction(ctx.chat.id, "typing");
-  await ctx.reply("📏 <b>Razmer</b> tanlang:", { reply_markup: await sizeKeyboard("ks"), parse_mode: "HTML" });
+  const kb = await sizeKeyboard("ks");
+  kb.text("✏️ Yangi razmer", "ks_new");
+  await ctx.reply("📏 <b>Razmer</b> tanlang yoki yangi razmer kiriting:", { reply_markup: kb, parse_mode: "HTML" });
+});
+
+bot.callbackQuery("ks_new", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.step = "kirim_size_new";
+  await ctx.reply("Yangi razmerni kiriting (masalan: 205/55 R16):", { reply_markup: backBtn });
 });
 
 bot.callbackQuery(/^ks_(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.data.razmer = ctx.match[1];
   ctx.session.step = "kirim_brand";
+  const kb = await brandKeyboard("kb");
+  kb.text("✏️ Yangi brend", "kb_new");
   await ctx.reply(
-    `📏 Razmer: <b>${ctx.match[1]}</b>\n\n🏷 Brend tanlang:`,
-    { reply_markup: await brandKeyboard("kb"), parse_mode: "HTML" }
+    `📏 Razmer: <b>${ctx.match[1]}</b>\n\n🏷 Brend tanlang yoki yangi brend kiriting:`,
+    { reply_markup: kb, parse_mode: "HTML" }
   );
+});
+
+bot.callbackQuery("kb_new", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.step = "kirim_brand_new";
+  await ctx.reply("Yangi brend nomini kiriting:", { reply_markup: backBtn });
 });
 
 bot.callbackQuery(/^kb_(.+)$/, async (ctx) => {
@@ -1825,32 +1841,40 @@ bot.hears("📋 Royxat", async (ctx) => {
   await ctx.reply("📋 <b>Ro'yxatlar</b>", { reply_markup: kb, parse_mode: "HTML" });
 });
 
+// Razmer va brend ro'yxatini bitta xabarda chiqarish
+async function sendSizesAndBrandsList(ctx) {
+  const [sizesRes, brandsRes] = await Promise.all([
+    pool.query("SELECT * FROM sizes ORDER BY id"),
+    pool.query("SELECT * FROM brands ORDER BY id")
+  ]);
+  let msg = "📋 <b>Ro'yxatlar</b>\n\n";
+  msg += "📏 <b>Razmerlar</b> (ID tartibida):\n";
+  if (sizesRes.rows.length === 0) {
+    msg += "  — bo'sh\n";
+  } else {
+    for (const r of sizesRes.rows) {
+      msg += `  <b>${r.id}</b>. ${r.name}\n`;
+    }
+  }
+  msg += "\n🏷 <b>Brendlar</b> (ID tartibida):\n";
+  if (brandsRes.rows.length === 0) {
+    msg += "  — bo'sh\n";
+  } else {
+    for (const r of brandsRes.rows) {
+      msg += `  <b>${r.id}</b>. ${r.name}\n`;
+    }
+  }
+  await ctx.reply(msg, { parse_mode: "HTML" });
+}
+
 bot.callbackQuery("list_sizes", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM sizes ORDER BY id");
-
-  if (result.rows.length === 0) {
-    await ctx.reply("Razmerlar ro'yxati bo'sh");
-    return;
-  }
-
-  for (const r of result.rows) {
-    await ctx.reply(`📏 <b>${r.id}</b>. ${r.name}`, { parse_mode: "HTML" });
-  }
+  await sendSizesAndBrandsList(ctx);
 });
 
 bot.callbackQuery("list_brands", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM brands ORDER BY id");
-
-  if (result.rows.length === 0) {
-    await ctx.reply("Brendlar ro'yxati bo'sh");
-    return;
-  }
-
-  for (const r of result.rows) {
-    await ctx.reply(`🏷 <b>${r.id}</b>. ${r.name}`, { parse_mode: "HTML" });
-  }
+  await sendSizesAndBrandsList(ctx);
 });
 
 bot.callbackQuery("add_size", async (ctx) => {
@@ -2377,6 +2401,38 @@ bot.on("message:text", async (ctx, next) => {
     return;
   }
 
+  // Ro'yxat — yangi razmer qo'shish (📋 Royxat → ➕ Razmer)
+  if (step === "add_size") {
+    const razmer = (text || "").trim();
+    if (!razmer) {
+      await ctx.reply("❌ Razmerni kiriting (masalan: 205/55 R16)");
+      return;
+    }
+    const sizeNorm = razmer.toUpperCase();
+    await pool.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [sizeNorm]);
+    ctx.session.step = null;
+    const kb = new InlineKeyboard()
+      .text("📏 Razmerlar", "list_sizes").text("🏷 Brendlar", "list_brands").row()
+      .text("➕ Razmer", "add_size").text("➕ Brend", "add_brand");
+    await ctx.reply(`✅ Razmer qo'shildi: <b>${sizeNorm}</b>`, { reply_markup: kb, parse_mode: "HTML" });
+    return;
+  }
+  // Ro'yxat — yangi brend qo'shish (📋 Royxat → ➕ Brend)
+  if (step === "add_brand") {
+    const brand = (text || "").trim();
+    if (!brand) {
+      await ctx.reply("❌ Brend nomini kiriting");
+      return;
+    }
+    await pool.query("INSERT INTO brands (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [brand]);
+    ctx.session.step = null;
+    const kb = new InlineKeyboard()
+      .text("📏 Razmerlar", "list_sizes").text("🏷 Brendlar", "list_brands").row()
+      .text("➕ Razmer", "add_size").text("➕ Brend", "add_brand");
+    await ctx.reply(`✅ Brend qo'shildi: <b>${brand}</b>`, { reply_markup: kb, parse_mode: "HTML" });
+    return;
+  }
+
   // Olinishi kerak — soni kiritilganda (qo'shish)
   if (step === "ol_soni") {
     const soni = parseInt(String(text).replace(/\s/g, ""), 10);
@@ -2619,6 +2675,61 @@ bot.on("message:text", async (ctx, next) => {
       `✅ Umumiy: <b>${formatNumber(umumiy)} so'm</b>\n\n🔄 Mijozdan rabochiy balon oldingizmi?`,
       { reply_markup: kb, parse_mode: "HTML" }
     );
+    return;
+  }
+  // Kirim - yangi razmer kiritilgach (📦 Kirim → Yangi kirim → Yangi razmer)
+  if (step === "kirim_size_new") {
+    const razmer = (text || "").trim();
+    if (!razmer) {
+      await ctx.reply("❌ Razmerni kiriting (masalan: 205/55 R16)");
+      return;
+    }
+    const sizeNorm = razmer.toUpperCase();
+    await pool.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [sizeNorm]);
+    ctx.session.data = ctx.session.data || {};
+    ctx.session.data.razmer = sizeNorm;
+    ctx.session.step = "kirim_brand";
+    const kbBrand = await brandKeyboard("kb");
+    kbBrand.text("✏️ Yangi brend", "kb_new");
+    await ctx.reply(
+      `📏 Razmer: <b>${sizeNorm}</b>\n\n🏷 Brend tanlang yoki yangi brend kiriting:`,
+      { reply_markup: kbBrand, parse_mode: "HTML" }
+    );
+    return;
+  }
+  // Kirim - yangi brend kiritilgach (📦 Kirim → Yangi kirim → Yangi brend)
+  if (step === "kirim_brand_new") {
+    const brand = (text || "").trim();
+    if (!brand) {
+      await ctx.reply("❌ Brend nomini kiriting");
+      return;
+    }
+    await pool.query("INSERT INTO brands (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [brand]);
+    ctx.session.data = ctx.session.data || {};
+    ctx.session.data.balon_turi = brand;
+    ctx.session.step = "kirim_soni";
+    await ctx.api.sendChatAction(ctx.chat.id, "typing");
+    await ctx.reply(
+      `✅ <b>${brand}</b> tanlandi.\n\n📏 Razmer: <b>${ctx.session.data.razmer}</b>\n🏷 Brend: <b>${brand}</b>\n\n🔢 <b>Nechta keldi?</b> sonini yozing:`,
+      { reply_markup: backBtn, parse_mode: "HTML" }
+    );
+    return;
+  }
+  // Rabochiy balon - yangi razmer kiritilgach (Kirim → Rabochiy → Qo'shish → Yangi razmer)
+  if (step === "rab_size_new") {
+    const razmer = (text || "").trim();
+    if (!razmer) {
+      await ctx.reply("❌ Razmerni kiriting (masalan: 205/55 R16)");
+      return;
+    }
+    const sizeNorm = razmer.toUpperCase();
+    await pool.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [sizeNorm]);
+    ctx.session.data = ctx.session.data || {};
+    ctx.session.data.razmer = sizeNorm;
+    ctx.session.step = "rab_brand";
+    const kb = await brandKeyboard("rb");
+    kb.text("✏️ Yangi brend", "rb_new");
+    await ctx.reply("🏷 Brend tanlang yoki yangi brend kiriting:", { reply_markup: kb });
     return;
   }
   // Rabochiy balon - yangi brend nomi kiritilgach
