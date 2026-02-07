@@ -463,7 +463,7 @@ async function getSkladRowsWithValuation(shopId = 1) {
     JOIN with_kirdi k ON q.razmer = k.razmer AND q.balon_turi = k.balon_turi
     LEFT JOIN last_sotish s ON q.razmer = s.razmer AND q.balon_turi = s.balon_turi
     WHERE q.q > 0
-    ORDER BY q.razmer, q.balon_turi
+    ORDER BY q.balon_turi, q.razmer
   `, [shopId]);
   return r.rows;
 }
@@ -471,6 +471,13 @@ async function getSkladRowsWithValuation(shopId = 1) {
 function formatNumber(num) {
   if (num === null || num === undefined) return '0';
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+function formatSana(d) {
+  if (d == null) return "";
+  if (typeof d === "string") return d.slice(0, 10);
+  if (d.toISOString) return d.toISOString().slice(0, 10);
+  return String(d);
 }
 
 // Summani yaxlitlash: 488000 -> 500000, 420000/430000 -> 450000 (50 mingga yuqoriga)
@@ -927,8 +934,10 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
 
   for (const r of result.rows) {
     const narx = Number(r.narx) || 0;
+    const narx4 = narx * 4;
     text += `🏷 <b>${r.balon_turi}</b>\n`;
-    text += `💵 ${formatNumber(narx)} so'm / dona\n\n`;
+    text += `💵 ${formatNumber(narx)} so'm / dona\n`;
+    text += `💵 4 ta: ${formatNumber(narx4)} so'm\n\n`;
   }
 
   text += `━━━━━━━━━━━━━━━━━━\n`;
@@ -1715,6 +1724,19 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       umSheet.addRow({ name: "Kutilayotgan sof foyda ($)", value: toDollar(skladValuation.kutilayotganFoyda, kurs) });
       umSheet.addRow({ name: "Eski balonlar ombori (so'm)", value: formatNumber(rabOmbor.summa) + " (" + rabOmbor.soni + " ta)" });
       umSheet.addRow({ name: "Rabochiy balonlar (dona)", value: String(rabochiyCount) });
+      // Har bir brend bo'yicha tannarx (birinchi varaqda)
+      const brendTannarx = {};
+      for (const r of qoldiqRows) {
+        const b = r.balon_turi;
+        if (!brendTannarx[b]) brendTannarx[b] = { dona: 0, sum: 0 };
+        brendTannarx[b].dona += Number(r.qoldiq);
+        brendTannarx[b].sum += Number(r.qoldiq) * Number(r.tan_narx);
+      }
+      umSheet.addRow({ name: "", value: "" });
+      umSheet.addRow({ name: "——— Har bir brend (tannarx) ———", value: "" });
+      for (const [brend, v] of Object.entries(brendTannarx).sort((a, b) => (a[0] || "").localeCompare(b[0] || ""))) {
+        umSheet.addRow({ name: brend, value: v.dona + " dona | " + toDollar(v.sum, kurs) });
+      }
       // Qoldiq qisqacha (qoldiqRows yuqorida olingan)
       const qSheet = workbook.addWorksheet("Qoldiq");
       qSheet.columns = [
@@ -1725,6 +1747,16 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       ];
       for (const r of qoldiqRows) {
         qSheet.addRow({ razmer: r.razmer, balon_turi: r.balon_turi, qoldiq: r.qoldiq, jami: toDollar(Number(r.qoldiq) * Number(r.tan_narx), kurs) });
+      }
+      // Varaq: Brend bo'yicha tannarx (umumiy varaqda ham bor)
+      const bSheet = workbook.addWorksheet("Brend bo'yicha tannarx");
+      bSheet.columns = [
+        { header: "Brend", key: "balon_turi", width: 22 },
+        { header: "Dona", key: "dona", width: 10 },
+        { header: "Tannarx jami ($)", key: "tannarx_jami", width: 18 }
+      ];
+      for (const [brend, v] of Object.entries(brendTannarx).sort((a, b) => (a[0] || "").localeCompare(b[0] || ""))) {
+        bSheet.addRow({ balon_turi: brend, dona: v.dona, tannarx_jami: toDollar(v.sum, kurs) });
       }
       // So'ngi chiqimlar (10 ta)
       const chiqimRows = await pool.query("SELECT id, razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 10", [shopId]);
@@ -1789,7 +1821,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         query += " AND sana >= $2 AND sana <= $3";
         params.push(startDate, endDate);
       }
-      query += " ORDER BY sana DESC, id DESC";
+      query += " ORDER BY balon_turi, razmer, sana DESC, id DESC";
       const result = await pool.query(query, params);
       const sheet = workbook.addWorksheet("Chiqim");
       sheet.columns = [
@@ -1845,7 +1877,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       }
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `sklad_${dateStr}.xlsx`));
     } else if (reportType === "rabochiy") {
-      const result = await pool.query("SELECT id, razmer, balon_turi, soni, narx, holat, sana FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY sana DESC, id DESC", [shopId]);
+      const result = await pool.query("SELECT id, razmer, balon_turi, soni, narx, holat, sana FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY balon_turi, razmer, id DESC", [shopId]);
       const sheet = workbook.addWorksheet("Rabochiy");
       sheet.columns = [
         { header: "ID", key: "id", width: 8 },
@@ -1862,7 +1894,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       const { startDate, endDate } = periodType === "all" ? { startDate: "2000-01-01", endDate: "2099-12-31" } : getDateRange(periodType);
       const result = await pool.query(
         `SELECT id, razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, sana, dollar_kurs, narx_dona 
-         FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 AND sana <= $3 ORDER BY sana DESC, id DESC`,
+         FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 AND sana <= $3 ORDER BY balon_turi, razmer, sana DESC, id DESC`,
         [shopId, startDate, endDate]
       );
       const sheet = workbook.addWorksheet("Kirim");
@@ -2178,7 +2210,8 @@ bot.callbackQuery(/^ob_(.+)$/, async (ctx) => {
   await ctx.reply("🔢 Nechta kerak?", { reply_markup: backBtn });
 });
 
-// Avtomatik: qoldiq 4 tadan kam bo'lgan pozitsiyalarni olinish_kerak ga qo'shish
+// Avtomatik: (1) qoldiq 4 tadan kam bo'lgan pozitsiyalarni olinish_kerak ga qo'shish;
+// (2) bor razmerlar ro'yxatida bo'lib skladda 0 qolgan (razmer+brend) ham olinishi kerakga qo'shiladi (q=0 ham q<4 da)
 async function syncOlinishKerakFromStock(shopId = 1) {
   const r = await pool.query(`
     WITH agg AS (
@@ -2207,6 +2240,37 @@ async function syncOlinishKerakFromStock(shopId = 1) {
       [row.razmer, row.balon_turi, need, shopId]
     );
   }
+  // Ro'yxat (Razmerlar) jadvalidagi razmerlar ichida skladda 0 qolganlarni ham olinishi kerakga qo'shish
+  const sizesZero = await pool.query(`
+    WITH agg AS (
+      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi
+      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
+    ),
+    outgo AS (
+      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
+      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
+    ),
+    qoldiq AS (
+      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q
+      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
+    ),
+    total_per_razmer AS (
+      SELECT razmer, SUM(q)::int AS total FROM qoldiq GROUP BY razmer
+    ),
+    mavjud_placeholder AS (
+      SELECT razmer FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) AND balon_turi = '—'
+    )
+    SELECT s.name FROM sizes s
+    LEFT JOIN total_per_razmer t ON s.name = t.razmer
+    LEFT JOIN mavjud_placeholder m ON s.name = m.razmer
+    WHERE (t.total IS NULL OR t.total = 0) AND m.razmer IS NULL
+  `, [shopId]);
+  for (const row of sizesZero.rows) {
+    await pool.query(
+      "INSERT INTO olinish_kerak (razmer, balon_turi, soni, shop_id) VALUES ($1, '—', 1, $2)",
+      [row.name, shopId]
+    );
+  }
 }
 
 bot.callbackQuery("ol_list", async (ctx) => {
@@ -2220,13 +2284,14 @@ bot.callbackQuery("ol_list", async (ctx) => {
     return;
   }
 
+  let msg = "🛒 <b>Olinishi kerak</b> (ID bo'yicha):\n\n";
   for (const r of result.rows) {
-    const kb = new InlineKeyboard().text("✏️ Tahrirlash", `ol_edit_${r.id}`);
-    await ctx.reply(
-      `🛒 <b>${r.id}</b>. ${r.razmer} | ${r.balon_turi} — ${r.soni} ta`,
-      { reply_markup: kb, parse_mode: "HTML" }
-    );
+    msg += `ID <b>${r.id}</b> — ${r.razmer} | ${r.balon_turi} — ${r.soni} ta\n`;
   }
+  msg += "\n✏️ Tahrirlash uchun ID raqamini yozing:";
+  ctx.session.step = "ol_list_edit_id";
+  ctx.session.data = ctx.session.data || {};
+  await ctx.reply(msg, { parse_mode: "HTML", reply_markup: backBtn });
 });
 
 bot.callbackQuery(/^ol_edit_(\d+)$/, async (ctx) => {
@@ -2549,6 +2614,26 @@ bot.on("message:text", async (ctx, next) => {
     return;
   }
 
+  // Olinishi kerak — ID yozilganda tahrirlashga o'tish (bitta xabar ro'yxatidan)
+  if (step === "ol_list_edit_id") {
+    if (text.trim() === "Orqaga" || text.trim() === "🔙 Orqaga") {
+      ctx.session.step = null;
+      ctx.session.data = {};
+      await ctx.reply("Bekor qilindi.", { reply_markup: adminMenu });
+      return;
+    }
+    const id = parseInt(String(text).replace(/\s/g, ""), 10);
+    if (isNaN(id) || id < 1) {
+      await ctx.reply("❌ To'g'ri ID kiriting (musbat son) yoki Orqaga bosing.");
+      return;
+    }
+    ctx.session.step = "ol_edit";
+    ctx.session.data = ctx.session.data || {};
+    ctx.session.data.edit_id = id;
+    await ctx.reply("Yangi sonni kiriting:", { reply_markup: backBtn });
+    return;
+  }
+
   // Olinishi kerak — tahrirlash (yangi soni)
   if (step === "ol_edit") {
     const soni = parseInt(String(text).replace(/\s/g, ""), 10);
@@ -2597,7 +2682,7 @@ bot.on("message:text", async (ctx, next) => {
   if (step === "editdel_field") {
     ctx.session.data = ctx.session.data || {};
     const field = text.trim().toLowerCase();
-    const allowedFields = ["name", "soni", "sotildi", "umumiy_qiymat", "foyda", "naqd_foyda", "zaxira_foyda", "rabochiy_olindi", "rabochiy_narxi", "kelgan_narx", "sotish_narx", "narx", "sana", "razmer", "balon_turi"];
+    const allowedFields = ["name", "soni", "sotildi", "umumiy_qiymat", "foyda", "naqd_foyda", "zaxira_foyda", "rabochiy_olindi", "rabochiy_narxi", "kelgan_narx", "sotish_narx", "narx", "sana", "razmer", "balon_turi", "holat", "olingan_narx", "sotilgan_narx"];
     if (!allowedFields.includes(field)) {
       await ctx.reply("❌ Noma'lum maydon. Ruxsat etilgan: " + allowedFields.join(", "));
       return;
@@ -2630,7 +2715,7 @@ bot.on("message:text", async (ctx, next) => {
       const shopId = getCurrentShopId(ctx);
       const kurs = parseInt(await getSetting("dollar_kurs", shopId)) || 1;
       value = Math.round(dollarNum * kurs);
-    } else if (["soni", "sotildi", "umumiy_qiymat", "foyda", "naqd_foyda", "zaxira_foyda", "rabochiy_olindi", "rabochiy_narxi", "kelgan_narx", "sotish_narx", "narx"].includes(field)) {
+    } else if (["soni", "sotildi", "umumiy_qiymat", "foyda", "naqd_foyda", "zaxira_foyda", "rabochiy_olindi", "rabochiy_narxi", "kelgan_narx", "sotish_narx", "narx", "olingan_narx", "sotilgan_narx"].includes(field)) {
       value = parseInt(text.replace(/\s/g, ""), 10);
       if (isNaN(value)) {
         await ctx.reply("❌ To'g'ri son kiriting");
@@ -2651,7 +2736,9 @@ bot.on("message:text", async (ctx, next) => {
       chiqim: {},
       olinish_kerak: {},
       sizes: {},
-      brands: {}
+      brands: {},
+      rabochiy_balon: {},
+      rabochiy_sotuv: {}
     };
     const resolvedField = (fieldMap[table] && fieldMap[table][field]) ? fieldMap[table][field] : field;
     try {
@@ -3323,6 +3410,7 @@ bot.callbackQuery("settings_editdel", async (ctx) => {
     .text("Kirim", "editdel_kirim").text("Chiqim", "editdel_chiqim").row()
     .text("Olinish kerak", "editdel_ol").row()
     .text("Razmer", "editdel_size").text("Brend", "editdel_brand").row()
+    .text("🔄 Rabochiy balon", "editdel_rabochiy_balon").text("🔄 Rabochiy sotuv", "editdel_rabochiy_sotuv").row()
     .text("🔙 Orqaga", "settings_back");
   await ctx.reply("Qaysi jadvaldan o'chirish/tahrirlash?", { reply_markup: kb });
 });
@@ -3368,6 +3456,26 @@ bot.callbackQuery("editdel_edit", async (ctx) => {
     await ctx.reply(`ID: <b>${id}</b> (kirim) – qaysi maydonni tahrirlaysiz?\n\n💲 Kelgan narx va Sotish narxni <b>dollar ($)</b> da kiriting.`, { reply_markup: kb, parse_mode: "HTML" });
     return;
   }
+  if (table === "rabochiy_balon") {
+    ctx.session.step = "editdel_field";
+    const kb = new InlineKeyboard()
+      .text("📏 Razmer", "editdel_f_razmer").text("🏷 Brend", "editdel_f_balon_turi").row()
+      .text("🔢 Soni", "editdel_f_soni").text("💰 Narx (so'm)", "editdel_f_narx").row()
+      .text("📅 Sana", "editdel_f_sana").text("Holat", "editdel_f_holat").row()
+      .text("🔙 Orqaga", "settings_editdel");
+    await ctx.reply(`ID: <b>${id}</b> (rabochiy balon) – qaysi maydonni tahrirlaysiz?`, { reply_markup: kb, parse_mode: "HTML" });
+    return;
+  }
+  if (table === "rabochiy_sotuv") {
+    ctx.session.step = "editdel_field";
+    const kb = new InlineKeyboard()
+      .text("📏 Razmer", "editdel_f_razmer").text("🏷 Brend", "editdel_f_balon_turi").row()
+      .text("Olingan narx", "editdel_f_olingan_narx").text("Sotilgan narx", "editdel_f_sotilgan_narx").row()
+      .text("📅 Sana", "editdel_f_sana").row()
+      .text("🔙 Orqaga", "settings_editdel");
+    await ctx.reply(`ID: <b>${id}</b> (rabochiy sotuv) – qaysi maydonni tahrirlaysiz?`, { reply_markup: kb, parse_mode: "HTML" });
+    return;
+  }
   ctx.session.step = "editdel_field";
   await ctx.reply("Qaysi maydonni tahrirlaysiz? (maydon nomini yozing, masalan: soni, narx, sana, name, ...)", { reply_markup: backBtn });
 });
@@ -3389,7 +3497,67 @@ bot.callbackQuery(/^editdel_f_(.+)$/, async (ctx) => {
   ctx.session.step = "editdel_value";
 });
 
-bot.callbackQuery(/^editdel_(kirim|chiqim|ol|size|brand)$/, async (ctx) => {
+// Ro'yxat ko'rsatish: jadval tanlanganda avval yozuvlar ro'yxati chiqadi, keyin ID so'raladi
+async function sendEditDelListAndAskId(ctx, tableName, shopId) {
+  const LIMIT = 35;
+  let listMsg = "";
+  let rows = [];
+  if (tableName === "kirim") {
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, soni, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
+      [shopId, LIMIT]
+    );
+    rows = r.rows;
+    listMsg = "📥 <b>Kirim</b> (so'nggi " + rows.length + " ta):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta (${formatSana(x.sana)})\n`;
+  } else if (tableName === "chiqim") {
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, sotildi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
+      [shopId, LIMIT]
+    );
+    rows = r.rows;
+    listMsg = "📤 <b>Chiqim</b> (so'nggi " + rows.length + " ta):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.sotildi} ta (${formatSana(x.sana)})\n`;
+  } else if (tableName === "olinish_kerak") {
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, soni FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id",
+      [shopId]
+    );
+    rows = r.rows;
+    listMsg = "🛒 <b>Olinishi kerak</b>:\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta\n`;
+  } else if (tableName === "sizes") {
+    const r = await pool.query("SELECT id, name FROM sizes ORDER BY id");
+    rows = r.rows;
+    listMsg = "📏 <b>Razmerlar</b>:\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.name}\n`;
+  } else if (tableName === "brands") {
+    const r = await pool.query("SELECT id, name FROM brands ORDER BY id");
+    rows = r.rows;
+    listMsg = "🏷 <b>Brendlar</b>:\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.name}\n`;
+  } else if (tableName === "rabochiy_balon") {
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, soni, narx, holat FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
+      [shopId, LIMIT]
+    );
+    rows = r.rows;
+    listMsg = "🔄 <b>Rabochiy balon</b> (so'nggi " + rows.length + " ta):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta, ${formatNumber(x.narx)} so'm (${x.holat || ""})\n`;
+  } else if (tableName === "rabochiy_sotuv") {
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, olingan_narx, sotilgan_narx, sana FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
+      [shopId, LIMIT]
+    );
+    rows = r.rows;
+    listMsg = "🔄 <b>Rabochiy sotuv</b> (so'nggi " + rows.length + " ta):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} (${formatSana(x.sana)})\n`;
+  }
+  if (listMsg) await ctx.reply(listMsg, { parse_mode: "HTML" });
+  await ctx.reply("ID ni kiriting (o'chirish yoki tahrirlash uchun yuqoridagi ro'yxatdan):", { reply_markup: backBtn });
+}
+
+bot.callbackQuery(/^editdel_(kirim|chiqim|ol|size|brand|rabochiy_balon|rabochiy_sotuv)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.data = ctx.session.data || {};
   const tableMap = {
@@ -3397,12 +3565,15 @@ bot.callbackQuery(/^editdel_(kirim|chiqim|ol|size|brand)$/, async (ctx) => {
     chiqim: "chiqim",
     ol: "olinish_kerak",
     size: "sizes",
-    brand: "brands"
+    brand: "brands",
+    rabochiy_balon: "rabochiy_balon",
+    rabochiy_sotuv: "rabochiy_sotuv"
   };
   const t = ctx.match[1];
   ctx.session.data.editdel_table = tableMap[t];
   ctx.session.step = "editdel_id";
-  await ctx.reply("ID ni kiriting (o'chirish/tahrirlash uchun):", { reply_markup: backBtn });
+  const shopId = getCurrentShopId(ctx);
+  await sendEditDelListAndAskId(ctx, tableMap[t], shopId);
 });
 
 // ==================== AVTOMATIK HISOBOT (CRON) ====================
