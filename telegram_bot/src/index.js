@@ -328,6 +328,81 @@ function getCurrentShopId(ctx) {
   return ctx.session?.shopId != null ? ctx.session.shopId : 1;
 }
 
+/** User panelda: admin bo'lsa joriy do'kon; oddiy user bo'lsa tanlangan do'kon (userShopId). Do'kon tanlanmagan bo'lsa null. */
+async function getUserShopId(ctx) {
+  if (!ctx.from?.id) return null;
+  if (await isAdmin(ctx.from.id)) return getCurrentShopId(ctx);
+  return ctx.session?.userShopId != null ? ctx.session.userShopId : null;
+}
+
+/** User uchun do'kon tanlash ekrani (barcha do'konlar + Yaqin do'konlar) */
+async function showShopSelection(ctx, text = "Do'kon tanlang — balonlar va narxlarni ko'rish uchun do'konni tanlang:") {
+  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  const kb = new InlineKeyboard();
+  for (const row of shops.rows) {
+    kb.text(`🏪 ${row.name}`, `user_select_shop_${row.id}`).row();
+  }
+  kb.text("📍 Yaqin do'konlar", "user_nearby_shop_select").row();
+  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
+}
+
+/** Haversine: ikki nuqta orasidagi masofa (km) */
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/** Barcha do'konlar ro'yxati (id, name, address, phone, lat, lon, working_hours, shop_name) */
+async function getAllShopsWithSettings() {
+  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  const list = [];
+  for (const row of shops.rows) {
+    const shopId = row.id;
+    const address = await getSetting("address", shopId);
+    const phone = await getSetting("phone", shopId);
+    const latStr = await getSetting("latitude", shopId);
+    const lonStr = await getSetting("longitude", shopId);
+    const workingHours = await getSetting("working_hours", shopId);
+    const shopName = await getSetting("shop_name", shopId) || row.name;
+    const lat = latStr ? parseFloat(latStr) : NaN;
+    const lon = lonStr ? parseFloat(lonStr) : NaN;
+    list.push({
+      id: shopId,
+      name: row.name,
+      shopName: shopName || row.name,
+      address: address || "-",
+      phone: phone || "-",
+      workingHours: workingHours || "-",
+      latitude: !isNaN(lat) ? lat : null,
+      longitude: !isNaN(lon) ? lon : null,
+    });
+  }
+  return list;
+}
+
+/** User lokatsiyasiga qarab do'konlarni yaqinlik bo'yicha saralash (lokatsiyasi borlar avval, km bo'yicha) */
+async function getShopsSortedByDistance(userLat, userLon) {
+  const list = await getAllShopsWithSettings();
+  const withLocation = [];
+  const withoutLocation = [];
+  for (const s of list) {
+    if (s.latitude != null && s.longitude != null) {
+      const km = haversineKm(userLat, userLon, s.latitude, s.longitude);
+      withLocation.push({ ...s, distanceKm: km });
+    } else {
+      withoutLocation.push({ ...s, distanceKm: null });
+    }
+  }
+  withLocation.sort((a, b) => a.distanceKm - b.distanceKm);
+  return [...withLocation, ...withoutLocation];
+}
+
 /** Foydalanuvchi turi bo'yicha bosh menyu (user / admin / boss) */
 async function getMainMenu(ctx) {
   if (ctx.from && (await isAdmin(ctx.from.id))) return isBoss(ctx.from.id) ? bossMenu : adminMenu;
@@ -520,6 +595,11 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
     ctx.session.data = {};
     return;
   }
+  // Birinchi marta kirim kiritilganda default sotish narxini (so'm) saqlaymiz — kurs o'zgasa ham bu summa o'zgarmaydi
+  const existingDefault = await getSetting("default_sotish_narx_som", shopId);
+  if (!existingDefault || existingDefault === "" || existingDefault === "0") {
+    await setSetting("default_sotish_narx_som", String(sotishSom), shopId);
+  }
   ctx.session.step = null;
   ctx.session.data = {};
   const tanDollar = (kelganSom / kurs).toFixed(1);
@@ -564,7 +644,9 @@ const bossMenu = new Keyboard()
 const userMenu = new Keyboard()
   .text("🛞 Yangi Balonlar").text("🔄 Rabochiy Balonlar").row()
   .text("🚗 Mashinam uchun razmer").row()
-  .text("📍 Manzil").text("📞 Aloqa")
+  .text("📍 Manzil").text("📞 Aloqa").row()
+  .text("📍 Yaqin do'konlar").row()
+  .text("🔄 Do'konni almashtirish")
   .resized();
 
 // Mashina modeli bo'yicha shina razmerlari ma'lumoti (userlar uchun)
@@ -763,7 +845,7 @@ async function brandKeyboard(prefix = "brand") {
 const bot = new Bot(process.env.TELEGRAM_BOT_TOKEN);
 
 bot.use(session({
-  initial: () => ({ step: null, data: {} })
+  initial: () => ({ step: null, data: {}, userShopId: null })
 }));
 
 bot.catch(err => console.error("Bot error:", err));
@@ -788,8 +870,22 @@ bot.command("start", async (ctx) => {
       { reply_markup: menu, parse_mode: "HTML" }
     );
   } else {
-    const shopName = await getSetting("shop_name", 1);
-    const workingHours = await getSetting("working_hours", 1);
+    const userShopId = ctx.session?.userShopId;
+    if (userShopId == null) {
+      await ctx.reply(
+        `🛞 Salom, ${name}!\n\n` +
+        `✨ Eng sifatli shinalar\n` +
+        `💯 Kafolat bilan\n` +
+        `🚗 Barcha avtomobillar uchun\n\n` +
+        `👇 Balonlar va narxlarni ko'rish uchun avval do'konni tanlang:`,
+        { parse_mode: "HTML" }
+      );
+      await showShopSelection(ctx);
+      await ctx.reply("Yoki quyidagi tugmalardan foydalaning:", { reply_markup: userMenu });
+      return;
+    }
+    const shopName = await getSetting("shop_name", userShopId);
+    const workingHours = await getSetting("working_hours", userShopId);
     await ctx.reply(
       `🛞 <b>${shopName}</b> ga xush kelibsiz!\n\n` +
       `✨ Eng sifatli shinalar\n` +
@@ -877,28 +973,27 @@ bot.callbackQuery("qidiruv_eski", async (ctx) => {
   await ctx.reply(text, { reply_markup: await getMainMenu(ctx), parse_mode: "HTML" });
 });
 
-// Yangi Balonlar - faqat mavjud razmerlar, sonisiz
+// Yangi Balonlar - tanlangan do'kon bo'yicha (user) yoki joriy do'kon (admin)
 bot.hears("🛞 Yangi Balonlar", async (ctx) => {
-  // Mavjud razmerlarni olish (qoldig'i bor bo'lganlar)
-  const result = await pool.query(`
-    SELECT DISTINCT k.razmer 
-    FROM kirim k 
-    WHERE (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer) - 
-          (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer) > 0
-    ORDER BY k.razmer
-  `);
+  const shopId = await getUserShopId(ctx);
+  if (shopId == null) {
+    await ctx.reply("Avval do'kon tanlang — keyin shu do'konning balonlari va narxlari ko'rinadi.", { parse_mode: "HTML" });
+    await showShopSelection(ctx);
+    return;
+  }
 
-  if (result.rows.length === 0) {
+  const sizesWithStock = await getSizesWithStock(shopId);
+  if (sizesWithStock.length === 0) {
     await ctx.reply(
-      "😔 Hozircha mavjud balonlar yo'q.",
+      "😔 Hozircha bu do'konda mavjud balonlar yo'q.",
       { reply_markup: await getMainMenu(ctx) }
     );
     return;
   }
 
   const kb = new InlineKeyboard();
-  for (const r of result.rows) {
-    kb.text(`🛞 ${r.razmer}`, `user_size_${r.razmer}`).row();
+  for (const razmer of sizesWithStock) {
+    kb.text(`🛞 ${razmer}`, `user_size_${razmer}`).row();
   }
 
   await ctx.reply(
@@ -907,24 +1002,20 @@ bot.hears("🛞 Yangi Balonlar", async (ctx) => {
   );
 });
 
-// Razmer tanlanganda brendlarni ko'rsatish
+// Razmer tanlanganda brendlarni ko'rsatish (tanlangan do'kon bo'yicha)
 bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const razmer = ctx.match[1];
+  const shopId = await getUserShopId(ctx);
+  if (shopId == null) {
+    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
+    await showShopSelection(ctx);
+    return;
+  }
 
-  // Bu razmerdagi mavjud brendlar va narxlar
-  const result = await pool.query(`
-    SELECT DISTINCT k.balon_turi, 
-      (SELECT sotish_narx FROM kirim WHERE razmer = $1 AND balon_turi = k.balon_turi ORDER BY id DESC LIMIT 1) as narx
-    FROM kirim k 
-    WHERE k.razmer = $1 AND 
-      (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = $1 AND balon_turi = k.balon_turi) - 
-      (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = $1 AND balon_turi = k.balon_turi) > 0
-    ORDER BY k.balon_turi
-  `, [razmer]);
-
-  if (result.rows.length === 0) {
-    await ctx.reply("Bu razmerda hozircha mavjud emas", { reply_markup: await getMainMenu(ctx) });
+  const brands = await getBrandsWithStock(razmer, shopId);
+  if (brands.length === 0) {
+    await ctx.reply("Bu razmerda hozircha bu do'konda mavjud emas", { reply_markup: await getMainMenu(ctx) });
     return;
   }
 
@@ -932,10 +1023,10 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
   text += `📦 Mavjud brendlar va narxlar:\n`;
   text += `━━━━━━━━━━━━━━━━━━\n\n`;
 
-  for (const r of result.rows) {
-    const narx = Number(r.narx) || 0;
+  for (const balon_turi of brands) {
+    const narx = await getSotishNarx(razmer, balon_turi, shopId);
     const narx4 = narx * 4;
-    text += `🏷 <b>${r.balon_turi}</b>\n`;
+    text += `🏷 <b>${balon_turi}</b>\n`;
     text += `💵 ${formatNumber(narx)} so'm / dona\n`;
     text += `💵 4 ta: ${formatNumber(narx4)} so'm\n\n`;
   }
@@ -949,9 +1040,15 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
   await ctx.reply(text, { reply_markup: kb || menu, parse_mode: "HTML" });
 });
 
-// Rabochiy Balonlar (mijoz va admin — joriy do'kon / 1)
+// Rabochiy Balonlar — tanlangan do'kon (user) yoki joriy do'kon (admin)
 bot.hears("🔄 Rabochiy Balonlar", async (ctx) => {
-  const shopId = ctx.from && (await isAdmin(ctx.from.id)) ? getCurrentShopId(ctx) : 1;
+  const shopId = await getUserShopId(ctx);
+  if (shopId == null) {
+    await ctx.reply("Avval do'kon tanlang — keyin shu do'konning rabochiy balonlari ko'rinadi.", { parse_mode: "HTML" });
+    await showShopSelection(ctx);
+    return;
+  }
+
   const result = await pool.query(
     "SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY razmer",
     [shopId]
@@ -959,7 +1056,7 @@ bot.hears("🔄 Rabochiy Balonlar", async (ctx) => {
 
   if (result.rows.length === 0) {
     await ctx.reply(
-      "🔄 <b>Rabochiy balonlar</b>\n\n😔 Hozircha yo'q.",
+      "🔄 <b>Rabochiy balonlar</b>\n\n😔 Hozircha bu do'konda yo'q.",
       { reply_markup: await getMainMenu(ctx), parse_mode: "HTML" }
     );
     return;
@@ -1032,29 +1129,36 @@ bot.callbackQuery("car_tire_back", async (ctx) => {
   await ctx.reply("🚗 Mashinangizni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
 });
 
-// Mashina ma'lumotidan keyin Yangi/Rabochiy balonlarga o'tish
+// Mashina ma'lumotidan keyin Yangi/Rabochiy balonlarga o'tish (tanlangan do'kon)
 bot.callbackQuery("user_go_new", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query(`
-    SELECT DISTINCT k.razmer FROM kirim k 
-    WHERE (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer) - 
-          (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer) > 0
-    ORDER BY k.razmer
-  `);
-  if (result.rows.length === 0) {
-    await ctx.reply("😔 Hozircha mavjud balonlar yo'q.", { reply_markup: userMenu });
+  const shopId = await getUserShopId(ctx);
+  if (shopId == null) {
+    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
+    await showShopSelection(ctx);
+    return;
+  }
+  const sizesWithStock = await getSizesWithStock(shopId);
+  if (sizesWithStock.length === 0) {
+    await ctx.reply("😔 Hozircha bu do'konda mavjud balonlar yo'q.", { reply_markup: userMenu });
     return;
   }
   const kb = new InlineKeyboard();
-  for (const r of result.rows) kb.text(`🛞 ${r.razmer}`, `user_size_${r.razmer}`).row();
+  for (const razmer of sizesWithStock) kb.text(`🛞 ${razmer}`, `user_size_${razmer}`).row();
   await ctx.reply("🛞 <b>Mavjud razmerlar</b>\n\nO'zingizga kerakli razmerni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
 });
 
 bot.callbackQuery("user_go_rab", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = 1) ORDER BY razmer");
+  const shopId = await getUserShopId(ctx);
+  if (shopId == null) {
+    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
+    await showShopSelection(ctx);
+    return;
+  }
+  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY razmer", [shopId]);
   if (result.rows.length === 0) {
-    await ctx.reply("😔 Hozircha rabochiy balonlar yo'q.", { reply_markup: userMenu });
+    await ctx.reply("😔 Hozircha bu do'konda rabochiy balonlar yo'q.", { reply_markup: userMenu });
     return;
   }
   let text = "🔄 <b>Rabochiy Balonlar</b>\n━━━━━━━━━━━━━━━━━━\n\n";
@@ -1065,62 +1169,108 @@ bot.callbackQuery("user_go_rab", async (ctx) => {
   await ctx.reply(text, { reply_markup: userMenu, parse_mode: "HTML" });
 });
 
-// Manzil - geo lokatsiya bilan
-bot.hears("📍 Manzil", async (ctx) => {
-  const address = await getSetting("address");
-  const lat = parseFloat(await getSetting("latitude"));
-  const lon = parseFloat(await getSetting("longitude"));
-  const workingHours = await getSetting("working_hours");
-  const shopName = await getSetting("shop_name");
-
-  await ctx.reply(
-    `📍 <b>${shopName}</b>\n\n` +
-    `🏠 ${address}\n` +
-    `🕐 Ish vaqti: ${workingHours}\n\n` +
-    `👇 Lokatsiyani pastda ko'ring:`,
-    { parse_mode: "HTML" }
-  );
-
-  // Geo lokatsiya yuborish
-  if (lat && lon && !isNaN(lat) && !isNaN(lon)) {
-    await ctx.replyWithLocation(lat, lon);
+// Barcha do'konlar — manzil matni, lokatsiyalar va "Bu do'konga kirish" tugmalari
+async function replyAllShopsManzil(ctx) {
+  const shops = await getAllShopsWithSettings();
+  if (shops.length === 0) {
+    await ctx.reply("Hozircha do'konlar ro'yxati bo'sh.", { reply_markup: userMenu });
+    return;
   }
+  let text = "📍 <b>Barcha do'konlar</b>\n\n";
+  const kb = new InlineKeyboard();
+  for (const s of shops) {
+    text += `🏪 <b>${s.shopName}</b>\n🏠 ${s.address}\n🕐 ${s.workingHours}\n\n`;
+    kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
+  }
+  text += "👇 Lokatsiyalar pastda (agar mavjud bo'lsa).\n\nBu do'konga kirish uchun tugmani bosing:";
+  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
+  for (const s of shops) {
+    if (s.latitude != null && s.longitude != null) {
+      await ctx.replyWithLocation(s.latitude, s.longitude);
+    }
+  }
+  await ctx.reply("Quyidagi tugmalardan foydalaning:", { reply_markup: userMenu });
+}
+
+// Manzil - barcha do'konlar
+bot.hears("📍 Manzil", async (ctx) => {
+  await replyAllShopsManzil(ctx);
 });
 
 bot.callbackQuery("user_location", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const lat = parseFloat(await getSetting("latitude"));
-  const lon = parseFloat(await getSetting("longitude"));
-  
-  if (lat && lon && !isNaN(lat) && !isNaN(lon)) {
-    await ctx.replyWithLocation(lat, lon);
-  } else {
-    const address = await getSetting("address");
-    await ctx.reply(`📍 Manzil: ${address}`);
-  }
+  await replyAllShopsManzil(ctx);
 });
 
-// Aloqa
-bot.hears("📞 Aloqa", async (ctx) => {
-  const phone = await getSetting("phone");
-  const shopName = await getSetting("shop_name");
-  const workingHours = await getSetting("working_hours");
+// Barcha do'konlar - aloqa (telefon, ish vaqti) va "Bu do'konga kirish"
+async function replyAllShopsAloqa(ctx) {
+  const shops = await getAllShopsWithSettings();
+  if (shops.length === 0) {
+    await ctx.reply("Hozircha do'konlar ro'yxati bo'sh.", { reply_markup: userMenu });
+    return;
+  }
+  let text = "📞 <b>Bog'lanish — barcha do'konlar</b>\n\n";
+  const kb = new InlineKeyboard();
+  for (const s of shops) {
+    text += `🏪 <b>${s.shopName}</b>\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
+    kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
+  }
+  text += "✅ Qo'ng'iroq qiling - bepul konsultatsiya!\n🚗 Yetkazib berish mavjud!\n\nBu do'konga kirish uchun tugmani bosing:";
+  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
+}
 
-  await ctx.reply(
-    `📞 <b>Bog'lanish</b>\n\n` +
-    `🏪 ${shopName}\n\n` +
-    `📱 Telefon: ${phone}\n` +
-    `🕐 Ish vaqti: ${workingHours}\n\n` +
-    `✅ Qo'ng'iroq qiling - bepul konsultatsiya!\n` +
-    `🚗 Yetkazib berish mavjud!`,
-    { reply_markup: userMenu, parse_mode: "HTML" }
-  );
+// Aloqa - barcha do'konlar
+bot.hears("📞 Aloqa", async (ctx) => {
+  await replyAllShopsAloqa(ctx);
 });
 
 bot.callbackQuery("user_contact", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const phone = await getSetting("phone");
-  await ctx.reply(`📞 Telefon: ${phone}\n\nQo'ng'iroq qiling!`);
+  await replyAllShopsAloqa(ctx);
+});
+
+// Yaqin do'konlar — lokatsiya so'rash
+bot.hears("📍 Yaqin do'konlar", async (ctx) => {
+  ctx.session.step = "user_nearby_shops";
+  const locationKb = new Keyboard().requestLocation("📍 Joylashuvni yuborish").resized();
+  await ctx.reply(
+    "Lokatsiyangizni yuboring — sizga eng yaqin do'konlarni ko'rsatamiz.\n\n" +
+    "Quyidagi tugmani bosing va xaritadan joylashuvingizni tanlang:",
+    { reply_markup: locationKb }
+  );
+});
+
+// "Barcha do'konlar" inline (yaqin do'konlar xabaridan keyin)
+bot.callbackQuery("user_shops_all", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await replyAllShopsManzil(ctx);
+});
+
+// Do'kon tanlash — ro'yxatdan yoki "Bu do'konga kirish" orqali
+bot.callbackQuery(/^user_select_shop_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = parseInt(ctx.match[1], 10);
+  const row = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
+  if (row.rows.length === 0) return;
+  ctx.session.userShopId = shopId;
+  const shopName = await getSetting("shop_name", shopId) || row.rows[0].name;
+  await ctx.reply(`✅ Do'kon tanlandi: <b>${shopName}</b>\n\nEndi yangi balonlar, rabochiy balonlar va narxlarni shu do'kon uchun ko'rasiz.`, { reply_markup: userMenu, parse_mode: "HTML" });
+});
+
+// Do'konni almashtirish — do'konlar ro'yxati
+bot.hears("🔄 Do'konni almashtirish", async (ctx) => {
+  await showShopSelection(ctx, "Boshqa do'konni tanlang:");
+});
+
+// Yaqin do'konlar — do'kon tanlash ekranidan (inline)
+bot.callbackQuery("user_nearby_shop_select", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.step = "user_nearby_shops";
+  const locationKb = new Keyboard().requestLocation("📍 Joylashuvni yuborish").resized();
+  await ctx.reply(
+    "Lokatsiyangizni yuboring — sizga eng yaqin do'konlarni ko'rsatamiz.\n\nQuyidagi tugmani bosing va xaritadan joylashuvingizni tanlang:",
+    { reply_markup: locationKb }
+  );
 });
 
 // ==================== BOSS: DO'KON TANLASH VA BOSHQARUV ====================
@@ -2435,6 +2585,59 @@ bot.on("message:photo", async (ctx, next) => {
   return next();
 });
 
+// Lokatsiya — admin: sozlamalar; user: yaqin do'konlar
+bot.on("message:location", async (ctx, next) => {
+  const step = ctx.session.step;
+  const loc = ctx.message.location;
+  if (!loc || loc.latitude == null || loc.longitude == null) return next();
+
+  // Admin — do'kon lokatsiyasini saqlash
+  if (step === "settings_shop_location") {
+    const shopId = getCurrentShopId(ctx);
+    await setSetting("latitude", String(loc.latitude), shopId);
+    await setSetting("longitude", String(loc.longitude), shopId);
+    ctx.session.step = null;
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Do'kon lokatsiyasi saqlandi. (${loc.latitude.toFixed(5)}, ${loc.longitude.toFixed(5)})`, { reply_markup: menu });
+    return;
+  }
+
+  // User — yaqin do'konlar (masofa bo'yicha)
+  if (step === "user_nearby_shops") {
+    ctx.session.step = null;
+    const sorted = await getShopsSortedByDistance(loc.latitude, loc.longitude);
+    const withLocation = sorted.filter((s) => s.distanceKm != null);
+    const withoutLocation = sorted.filter((s) => s.distanceKm == null);
+
+    let text = "📍 <b>Sizga yaqin do'konlar</b>\n\n";
+    if (withLocation.length > 0) {
+      for (const s of withLocation) {
+        text += `🏪 <b>${s.shopName}</b> — ${s.distanceKm.toFixed(1)} km\n🏠 ${s.address}\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
+      }
+    }
+    if (withoutLocation.length > 0) {
+      text += "━━━━━━━━━━━━━━━━━━\n<b>Boshqa do'konlar</b> (joylashuv kiritilmagan):\n\n";
+      for (const s of withoutLocation) {
+        text += `🏪 <b>${s.shopName}</b>\n🏠 ${s.address}\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
+      }
+    }
+    text += "👇 Eng yaqin do'konlar lokatsiyasi pastda.\n\nBu do'konga kirish uchun tugmani bosing:";
+    const kb = new InlineKeyboard();
+    for (const s of sorted) {
+      kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
+    }
+    kb.text("📋 Barcha do'konlar", "user_shops_all");
+    await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
+    for (const s of withLocation) {
+      await ctx.replyWithLocation(s.latitude, s.longitude);
+    }
+    await ctx.reply("Quyidagi tugmalardan foydalaning:", { reply_markup: userMenu });
+    return;
+  }
+
+  return next();
+});
+
 // Universal message:text handler (faqat bitta bo'lishi kerak)
 bot.on("message:text", async (ctx, next) => {
   const text = ctx.message.text;
@@ -2497,6 +2700,20 @@ bot.on("message:text", async (ctx, next) => {
     ctx.session.step = null;
     const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
     await ctx.reply(`✅ Dollar kursi yangilandi: ${formatNumber(kurs)} so'm`, { reply_markup: menu });
+    return;
+  }
+  // Sozlamalar - Sotish narxi (so'm)
+  if (step === "settings_sotish_narx") {
+    const num = parseInt(text.replace(/\s/g, "").replace(",", "."));
+    if (isNaN(num) || num < 0) {
+      await ctx.reply("❌ To'g'ri summani kiriting (so'm)");
+      return;
+    }
+    const shopId = getCurrentShopId(ctx);
+    await setSetting("default_sotish_narx_som", String(num), shopId);
+    ctx.session.step = null;
+    const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
+    await ctx.reply(`✅ Sotish narxi yangilandi: ${formatNumber(num)} so'm. Keyingi kirimlarda shu narx ishlatiladi.`, { reply_markup: menu });
     return;
   }
   // Sozlamalar - Do'kon nomi
@@ -2778,7 +2995,7 @@ bot.on("message:text", async (ctx, next) => {
     );
     return;
   }
-  // Kirim - kelgan narx (1 dona)
+  // Kirim - kelgan narx (1 dona). Agar do'konda default sotish narxi (so'm) bo'lsa so'ramaymiz.
   if (step === "kirim_kelgan_narx") {
     const num = parseFloat(text.replace(/\s/g, "").replace(",", "."));
     if (isNaN(num) || num < 0) {
@@ -2786,26 +3003,26 @@ bot.on("message:text", async (ctx, next) => {
       return;
     }
     ctx.session.data.kelgan_narx_input = num;
-    ctx.session.step = "kirim_sotish_type";
+    const shopId = getCurrentShopId(ctx);
+    const defaultSotishSom = await getSetting("default_sotish_narx_som", shopId);
+    const defaultNum = defaultSotishSom ? parseInt(String(defaultSotishSom).replace(/\s/g, ""), 10) : NaN;
+    if (!isNaN(defaultNum) && defaultNum > 0) {
+      // Keyingi tavarlar — sotish narxini so'ramaymiz, default (so'm) ishlatamiz (kurs o'zgasa ham o'sha summa o'zgarmaydi)
+      await ctx.api.sendChatAction(ctx.chat.id, "typing");
+      await saveKirimWithSotishNarx(ctx, defaultNum, "som");
+      return;
+    }
+    // Birinchi mahsulot — sotish narxini faqat so'mda so'raymiz
+    ctx.session.step = "kirim_sotish_narx";
+    ctx.session.data.sotish_type = "som";
     await ctx.api.sendChatAction(ctx.chat.id, "typing");
-    const kb = new InlineKeyboard().text("💵 So'm", "kirim_sotish_som").text("💲 Dollar", "kirim_sotish_dollar");
     await ctx.reply(
-      `✅ Tan narx: <b>${num}</b> ${ctx.session.data.narx_type === "dollar" ? "$" : "so'm"}\n\n💰 <b>Sotish narxini</b> qanday kiritasiz? (So'm yoki Dollar tugmasini bosing, yoki to'g'ridan-to'g'ri summani yozing)`,
-      { reply_markup: kb, parse_mode: "HTML" }
+      `✅ Tan narx: <b>${num}</b> ${ctx.session.data.narx_type === "dollar" ? "$" : "so'm"}\n\n💰 <b>Sotish narxini</b> kiriting (1 dona, so'm). Keyingi mahsulotlarda shu narx ishlatiladi, sozlamalardan o'zgartirish mumkin.`,
+      { reply_markup: backBtn, parse_mode: "HTML" }
     );
     return;
   }
-  // Kirim - sotish narx: tugmani bosmasdan to'g'ridan-to'g'ri raqam yozilsa (so'm deb hisoblanadi)
-  if (step === "kirim_sotish_type") {
-    const num = parseFloat(String(text).replace(/\s/g, "").replace(",", "."));
-    if (!isNaN(num) && num >= 0) {
-      ctx.session.data = ctx.session.data || {};
-      ctx.session.data.sotish_type = "som";
-      await saveKirimWithSotishNarx(ctx, num, "som");
-      return;
-    }
-  }
-  // Kirim - sotish narx (1 dona) va saqlash
+  // Kirim - sotish narx (1 dona, so'm) va saqlash (birinchi mahsulotda so'raladi)
   if (step === "kirim_sotish_narx") {
     ctx.session.data = ctx.session.data || {};
     const num = parseFloat(String(text).replace(/\s/g, "").replace(",", "."));
@@ -3267,6 +3484,7 @@ bot.hears("⚙️ Sozlamalar", async (ctx) => {
   const dollarKurs = await getSetting("dollar_kurs", shopId);
   const workingHours = await getSetting("working_hours", shopId);
 
+  const defaultSotish = await getSetting("default_sotish_narx_som", shopId);
   const infoText =
     `⚙️ <b>Sozlamalar bo'limi</b>\n\n` +
     `📋 <b>Joriy sozlamalar:</b>\n` +
@@ -3274,11 +3492,13 @@ bot.hears("⚙️ Sozlamalar", async (ctx) => {
     `📞 Telefon: ${phone || '-'}\n` +
     `📍 Manzil: ${address || '-'}\n` +
     `💵 Dollar kursi: ${dollarKurs ? formatNumber(dollarKurs) + ' so\'m' : '-'}\n` +
+    `💰 Sotish narxi (so'm): ${defaultSotish ? formatNumber(defaultSotish) + ' so\'m' : 'Belgilanmagan (birinchi kirimda so\'raladi)'}\n` +
     `🕐 Ish vaqti: ${workingHours || '-'}\n`;
 
   const kb = new InlineKeyboard()
     .text("🔑 Ma'lumot o'chirish/tahrirlash", "settings_editdel").row()
     .text("💵 Dollar kursi", "settings_dollar").text("🏪 Do'kon sozlamalari", "settings_shop").row()
+    .text("💰 Sotish narxi (so'm)", "settings_sotish_narx").row()
     .text("📊 Hisobotlarni boshqarish", "settings_reports").row()
     .text("🔙 Orqaga", "settings_back");
   await ctx.reply(infoText, { reply_markup: kb, parse_mode: "HTML" });
@@ -3339,6 +3559,20 @@ bot.callbackQuery("settings_dollar", async (ctx) => {
   );
 });
 
+bot.callbackQuery("settings_sotish_narx", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = getCurrentShopId(ctx);
+  const current = await getSetting("default_sotish_narx_som", shopId);
+  ctx.session.step = "settings_sotish_narx";
+  await ctx.reply(
+    `💰 <b>Sotish narxi (so'm) o'zgartirish</b>\n\n` +
+    `Keyingi kirimlarda ishlatiladigan default sotish narxi. So'mda saqlanadi — dollar kursi o'zgasa ham bu summa o'zgarmaydi.\n\n` +
+    `Joriy: ${current ? formatNumber(current) + ' so\'m' : 'Belgilanmagan'}\n\n` +
+    `Yangi sotish narxini kiriting (so'm, 1 dona):`,
+    { reply_markup: backBtn, parse_mode: "HTML" }
+  );
+});
+
 // Sozlamalar asosiy ekranini qayta ko'rsatish
 async function showSettingsMenu(ctx) {
   const shopId = getCurrentShopId(ctx);
@@ -3347,6 +3581,7 @@ async function showSettingsMenu(ctx) {
   const address = await getSetting("address", shopId);
   const dollarKurs = await getSetting("dollar_kurs", shopId);
   const workingHours = await getSetting("working_hours", shopId);
+  const defaultSotish = await getSetting("default_sotish_narx_som", shopId);
   const infoText =
     `⚙️ <b>Sozlamalar bo'limi</b>\n\n` +
     `📋 <b>Joriy sozlamalar:</b>\n` +
@@ -3354,10 +3589,12 @@ async function showSettingsMenu(ctx) {
     `📞 Telefon: ${phone || '-'}\n` +
     `📍 Manzil: ${address || '-'}\n` +
     `💵 Dollar kursi: ${dollarKurs ? formatNumber(dollarKurs) + ' so\'m' : '-'}\n` +
+    `💰 Sotish narxi (so'm): ${defaultSotish ? formatNumber(defaultSotish) + ' so\'m' : 'Belgilanmagan'}\n` +
     `🕐 Ish vaqti: ${workingHours || '-'}\n`;
   const kb = new InlineKeyboard()
     .text("🔑 Ma'lumot o'chirish/tahrirlash", "settings_editdel").row()
     .text("💵 Dollar kursi", "settings_dollar").text("🏪 Do'kon sozlamalari", "settings_shop").row()
+    .text("💰 Sotish narxi (so'm)", "settings_sotish_narx").row()
     .text("📊 Hisobotlarni boshqarish", "settings_reports").row()
     .text("🔙 Orqaga", "settings_back");
   return ctx.editMessageText(infoText, { reply_markup: kb, parse_mode: "HTML" }).catch(() =>
@@ -3371,12 +3608,13 @@ bot.callbackQuery("settings_menu", async (ctx) => {
   await showSettingsMenu(ctx);
 });
 
-// Do'kon sozlamalari (nom, telefon, manzil, ish vaqti)
+// Do'kon sozlamalari (nom, telefon, manzil matni, lokatsiya, ish vaqti)
 bot.callbackQuery("settings_shop", async (ctx) => {
   await ctx.answerCallbackQuery();
   const kb = new InlineKeyboard()
     .text("🏪 Do'kon nomi", "shop_name").text("📞 Telefon", "shop_phone").row()
-    .text("📍 Manzil", "shop_address").text("🕐 Ish vaqti", "shop_hours").row()
+    .text("📍 Manzil (matn)", "shop_address").text("📍 Lokatsiya", "shop_location").row()
+    .text("🕐 Ish vaqti", "shop_hours").row()
     .text("🔙 Orqaga", "settings_menu");
   await ctx.reply("Qaysi sozlamani o'zgartirmoqchisiz?", { reply_markup: kb });
 });
@@ -3394,7 +3632,13 @@ bot.callbackQuery("shop_phone", async (ctx) => {
 bot.callbackQuery("shop_address", async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.step = "settings_shop_address";
-  await ctx.reply("Yangi manzilni kiriting:", { reply_markup: backBtn });
+  await ctx.reply("Yangi manzilni matn ko'rinishida kiriting:", { reply_markup: backBtn });
+});
+bot.callbackQuery("shop_location", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.step = "settings_shop_location";
+  const locationKb = new Keyboard().requestLocation("📍 Joylashuvni yuborish").resized();
+  await ctx.reply("Do'kon joylashuvini yuboring — quyidagi tugmani bosing va lokatsiyani tanlang:", { reply_markup: locationKb });
 });
 bot.callbackQuery("shop_hours", async (ctx) => {
   await ctx.answerCallbackQuery();
