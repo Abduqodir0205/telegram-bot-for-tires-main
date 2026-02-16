@@ -9,6 +9,7 @@ const ExcelJS = require("exceljs");
 const cron = require("node-cron");
 const express = require('express');
 const app = express();
+// Render.com dinamik PORT talab qiladi; mahalliy ishga tushirishda 3000 ishlatiladi
 const PORT = process.env.PORT || 3000;
 
 // ==================== DATABASE SETUP ====================
@@ -184,6 +185,24 @@ async function ensureShopsAndAdmins() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  // Render/Prisma bilan yaratilgan shops jadvalida ustunlar bo‘lmasa qo‘shish (migratsiya)
+  const shopColumns = [
+    ["address", "TEXT"],
+    ["dollar_kurs", "VARCHAR(20)"],
+    ["report_daily_time", "VARCHAR(10) DEFAULT '21:00'"],
+    ["report_weekly_day", "VARCHAR(2) DEFAULT '5'"],
+    ["latitude", "VARCHAR(20)"],
+    ["longitude", "VARCHAR(20)"],
+    ["working_hours", "VARCHAR(50)"],
+    ["created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"],
+  ];
+  for (const [col, type] of shopColumns) {
+    try {
+      await pool.query(`ALTER TABLE shops ADD COLUMN IF NOT EXISTS ${col} ${type}`);
+    } catch (e) {
+      if (!e.message?.includes("already exists")) console.warn("shops column migration:", col, e.message);
+    }
+  }
   await pool.query(`
     CREATE TABLE IF NOT EXISTS shop_admins (
       telegram_id BIGINT NOT NULL,
