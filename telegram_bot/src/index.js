@@ -238,8 +238,8 @@ async function ensureShopsAndAdmins() {
   const hasShop1 = await pool.query("SELECT id FROM shops WHERE id = 1");
   if (hasShop1.rows.length === 0) {
     await pool.query(`
-      INSERT INTO shops (id, name, phone, address, dollar_kurs, report_daily_time, report_weekly_day, latitude, longitude, working_hours)
-      VALUES (1, 'SherShina', '+998 90 123 45 67', 'Toshkent shahri', '12800', '21:00', '5', '41.311081', '69.240562', '09:00 - 20:00')
+      INSERT INTO shops (id, name, phone, address, dollar_kurs, report_daily_time, report_weekly_day, latitude, longitude, working_hours, created_at, updated_at)
+      VALUES (1, 'SherShina', '+998 90 123 45 67', 'Toshkent shahri', '12800', '21:00', '5', '41.311081', '69.240562', '09:00 - 20:00', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `);
     const defaults = [
       ["shop_name", "SherShina"], ["phone", "+998 90 123 45 67"], ["address", "Toshkent shahri"],
@@ -355,7 +355,7 @@ async function getUserShopId(ctx) {
 }
 
 /** User uchun do'kon tanlash ekrani (barcha do'konlar + Yaqin do'konlar) */
-async function showShopSelection(ctx, text = "Do'kon tanlang — balonlar va narxlarni ko'rish uchun do'konni tanlang:") {
+async function showShopSelection(ctx, text = "Do'kon tanlang:") {
   const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
   const kb = new InlineKeyboard();
   for (const row of shops.rows) {
@@ -662,9 +662,7 @@ const bossMenu = new Keyboard()
 
 const userMenu = new Keyboard()
   .text("🛞 Yangi Balonlar").text("🔄 Rabochiy Balonlar").row()
-  .text("🚗 Mashinam uchun razmer").row()
-  .text("📍 Manzil").text("📞 Aloqa").row()
-  .text("📍 Yaqin do'konlar").row()
+  .text("📍 Do'konlar").text("🚗 Mashinam uchun").row()
   .text("🔄 Do'konni almashtirish")
   .resized();
 
@@ -891,29 +889,12 @@ bot.command("start", async (ctx) => {
   } else {
     const userShopId = ctx.session?.userShopId;
     if (userShopId == null) {
-      await ctx.reply(
-        `🛞 Salom, ${name}!\n\n` +
-        `✨ Eng sifatli shinalar\n` +
-        `💯 Kafolat bilan\n` +
-        `🚗 Barcha avtomobillar uchun\n\n` +
-        `👇 Balonlar va narxlarni ko'rish uchun avval do'konni tanlang:`,
-        { parse_mode: "HTML" }
-      );
+      await ctx.reply("🛞 Salom! Narxlarni ko'rish uchun do'kon tanlang:", { parse_mode: "HTML" });
       await showShopSelection(ctx);
-      await ctx.reply("Yoki quyidagi tugmalardan foydalaning:", { reply_markup: userMenu });
       return;
     }
     const shopName = await getSetting("shop_name", userShopId);
-    const workingHours = await getSetting("working_hours", userShopId);
-    await ctx.reply(
-      `🛞 <b>${shopName}</b> ga xush kelibsiz!\n\n` +
-      `✨ Eng sifatli shinalar\n` +
-      `💯 Kafolat bilan\n` +
-      `🚗 Barcha avtomobillar uchun\n\n` +
-      `🕐 Ish vaqti: ${workingHours}\n\n` +
-      `👇 Quyidagi tugmalardan foydalaning:`,
-      { reply_markup: userMenu, parse_mode: "HTML" }
-    );
+    await ctx.reply(`🛞 <b>${shopName}</b>\n\nQuyidagi tugmalardan foydalaning:`, { reply_markup: userMenu, parse_mode: "HTML" });
   }
 });
 
@@ -996,17 +977,14 @@ bot.callbackQuery("qidiruv_eski", async (ctx) => {
 bot.hears("🛞 Yangi Balonlar", async (ctx) => {
   const shopId = await getUserShopId(ctx);
   if (shopId == null) {
-    await ctx.reply("Avval do'kon tanlang — keyin shu do'konning balonlari va narxlari ko'rinadi.", { parse_mode: "HTML" });
+    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
     await showShopSelection(ctx);
     return;
   }
 
   const sizesWithStock = await getSizesWithStock(shopId);
   if (sizesWithStock.length === 0) {
-    await ctx.reply(
-      "😔 Hozircha bu do'konda mavjud balonlar yo'q.",
-      { reply_markup: await getMainMenu(ctx) }
-    );
+    await ctx.reply("😔 Hozircha mavjud emas.", { reply_markup: await getMainMenu(ctx) });
     return;
   }
 
@@ -1014,11 +992,7 @@ bot.hears("🛞 Yangi Balonlar", async (ctx) => {
   for (const razmer of sizesWithStock) {
     kb.text(`🛞 ${razmer}`, `user_size_${razmer}`).row();
   }
-
-  await ctx.reply(
-    "🛞 <b>Mavjud razmerlar</b>\n\nO'zingizga kerakli razmerni tanlang:\n\n💡 <i>Har bir razmerda turli brendlar mavjud</i>",
-    { reply_markup: kb, parse_mode: "HTML" }
-  );
+  await ctx.reply("🛞 Razmerni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
 });
 
 // Razmer tanlanganda brendlarni ko'rsatish (tanlangan do'kon bo'yicha)
@@ -1034,27 +1008,20 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
 
   const brands = await getBrandsWithStock(razmer, shopId);
   if (brands.length === 0) {
-    await ctx.reply("Bu razmerda hozircha bu do'konda mavjud emas", { reply_markup: await getMainMenu(ctx) });
+    await ctx.reply("Bu razmerda hozircha mavjud emas.", { reply_markup: await getMainMenu(ctx) });
     return;
   }
 
   let text = `🛞 <b>${razmer}</b>\n\n`;
-  text += `📦 Mavjud brendlar va narxlar:\n`;
-  text += `━━━━━━━━━━━━━━━━━━\n\n`;
-
   for (const balon_turi of brands) {
     const narx = await getSotishNarx(razmer, balon_turi, shopId);
     const narx4 = narx * 4;
-    text += `🏷 <b>${balon_turi}</b>\n`;
-    text += `💵 ${formatNumber(narx)} so'm / dona\n`;
-    text += `💵 4 ta: ${formatNumber(narx4)} so'm\n\n`;
+    text += `🏷 <b>${balon_turi}</b>\n💵 ${formatNumber(narx)} / dona | 4 ta: ${formatNumber(narx4)} so'm\n\n`;
   }
-
-  text += `━━━━━━━━━━━━━━━━━━\n`;
 
   const menu = await getMainMenu(ctx);
   const kb = menu === userMenu
-    ? new InlineKeyboard().text("📞 Bog'lanish", "user_contact").text("📍 Manzil", "user_location")
+    ? new InlineKeyboard().text("📞 Bog'lanish", "user_contact").text("📍 Do'konlar", "user_dokonlar")
     : null;
   await ctx.reply(text, { reply_markup: kb || menu, parse_mode: "HTML" });
 });
@@ -1063,7 +1030,7 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
 bot.hears("🔄 Rabochiy Balonlar", async (ctx) => {
   const shopId = await getUserShopId(ctx);
   if (shopId == null) {
-    await ctx.reply("Avval do'kon tanlang — keyin shu do'konning rabochiy balonlari ko'rinadi.", { parse_mode: "HTML" });
+    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
     await showShopSelection(ctx);
     return;
   }
@@ -1074,31 +1041,21 @@ bot.hears("🔄 Rabochiy Balonlar", async (ctx) => {
   );
 
   if (result.rows.length === 0) {
-    await ctx.reply(
-      "🔄 <b>Rabochiy balonlar</b>\n\n😔 Hozircha bu do'konda yo'q.",
-      { reply_markup: await getMainMenu(ctx), parse_mode: "HTML" }
-    );
+    await ctx.reply("😔 Hozircha yo'q.", { reply_markup: await getMainMenu(ctx), parse_mode: "HTML" });
     return;
   }
 
-  let text = "🔄 <b>Rabochiy Balonlar</b>\n";
-  text += "━━━━━━━━━━━━━━━━━━\n\n";
-  text += "💡 <i>Sifatli, arzon narxda!</i>\n\n";
-
+  let text = "🔄 <b>Rabochiy balonlar</b>\n\n";
   for (const r of result.rows) {
-    const holat = r.holat === 'yaxshi' ? '✅ Yaxshi' : r.holat === 'orta' ? '🟡 O\'rta' : '🔴 Past';
-    text += `🛞 <b>${r.razmer}</b> | ${r.balon_turi}\n`;
-    text += `💵 ${formatNumber(r.narx)} so'm\n`;
-    text += `📊 Holat: ${holat}\n\n`;
+    const holat = r.holat === 'yaxshi' ? '✅' : r.holat === 'orta' ? '🟡' : '🔴';
+    text += `🛞 ${r.razmer} | ${r.balon_turi} — ${formatNumber(r.narx)} so'm ${holat}\n`;
   }
-
-  text += `━━━━━━━━━━━━━━━━━━\n`;
-
   await ctx.reply(text, { reply_markup: await getMainMenu(ctx), parse_mode: "HTML" });
 });
 
 // Mashinam uchun razmer — mashina tanlab, qanday shina qo'yish mumkinligini ko'rsatish
-bot.hears("🚗 Mashinam uchun razmer", async (ctx) => {
+bot.hears("🚗 Mashinam uchun", async (ctx) => {
+  if (await isAdmin(ctx.from.id)) return;
   const entries = Object.entries(CAR_TIRE_INFO);
   const kb = new InlineKeyboard();
   for (let i = 0; i < entries.length; i += 2) {
@@ -1110,11 +1067,22 @@ bot.hears("🚗 Mashinam uchun razmer", async (ctx) => {
     }
     kb.row();
   }
-  await ctx.reply(
-    `🚗 <b>Mashinangiz uchun qanday shina razmeri kerak?</b>\n\n` +
-    `Mashinangizni tanlang — sizga tavsiya etiladigan shina o'lchamlari haqida to'liq ma'lumot beramiz.`,
-    { reply_markup: kb, parse_mode: "HTML" }
-  );
+  await ctx.reply("🚗 Mashinangizni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
+});
+bot.hears("🚗 Mashinam uchun razmer", async (ctx) => {
+  if (await isAdmin(ctx.from.id)) return;
+  const entries = Object.entries(CAR_TIRE_INFO);
+  const kb = new InlineKeyboard();
+  for (let i = 0; i < entries.length; i += 2) {
+    const [key1, data1] = entries[i];
+    kb.text(`🚗 ${data1.name}`, `car_tire_${key1}`);
+    if (entries[i + 1]) {
+      const [key2, data2] = entries[i + 1];
+      kb.text(`🚗 ${data2.name}`, `car_tire_${key2}`);
+    }
+    kb.row();
+  }
+  await ctx.reply("🚗 Mashinangizni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
 });
 
 bot.callbackQuery(/^car_tire_(.+)$/, async (ctx) => {
@@ -1148,6 +1116,33 @@ bot.callbackQuery("car_tire_back", async (ctx) => {
   await ctx.reply("🚗 Mashinangizni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
 });
 
+// Bitta "Do'konlar" ekrani: manzil, telefon, ish vaqti, Yaqin do'konlar + Kirish tugmalari
+async function replyDokonlar(ctx) {
+  const shops = await getAllShopsWithSettings();
+  if (shops.length === 0) {
+    await ctx.reply("Hozircha do'konlar yo'q.", { reply_markup: userMenu });
+    return;
+  }
+  let text = "📍 <b>Do'konlar</b>\n\n";
+  const kb = new InlineKeyboard();
+  for (const s of shops) {
+    text += `🏪 <b>${s.shopName}</b>\n🏠 ${s.address}\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
+    kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
+  }
+  kb.text("📍 Yaqin do'konlar", "user_nearby_shop_select");
+  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
+  for (const s of shops) {
+    if (s.latitude != null && s.longitude != null) {
+      await ctx.replyWithLocation(s.latitude, s.longitude);
+    }
+  }
+}
+
+bot.hears("📍 Do'konlar", async (ctx) => {
+  if (await isAdmin(ctx.from.id)) return;
+  await replyDokonlar(ctx);
+});
+
 // Mashina ma'lumotidan keyin Yangi/Rabochiy balonlarga o'tish (tanlangan do'kon)
 bot.callbackQuery("user_go_new", async (ctx) => {
   await ctx.answerCallbackQuery();
@@ -1159,12 +1154,12 @@ bot.callbackQuery("user_go_new", async (ctx) => {
   }
   const sizesWithStock = await getSizesWithStock(shopId);
   if (sizesWithStock.length === 0) {
-    await ctx.reply("😔 Hozircha bu do'konda mavjud balonlar yo'q.", { reply_markup: userMenu });
+    await ctx.reply("😔 Hozircha mavjud emas.", { reply_markup: userMenu });
     return;
   }
   const kb = new InlineKeyboard();
   for (const razmer of sizesWithStock) kb.text(`🛞 ${razmer}`, `user_size_${razmer}`).row();
-  await ctx.reply("🛞 <b>Mavjud razmerlar</b>\n\nO'zingizga kerakli razmerni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
+  await ctx.reply("🛞 Razmerni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
 });
 
 bot.callbackQuery("user_go_rab", async (ctx) => {
@@ -1177,10 +1172,10 @@ bot.callbackQuery("user_go_rab", async (ctx) => {
   }
   const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY razmer", [shopId]);
   if (result.rows.length === 0) {
-    await ctx.reply("😔 Hozircha bu do'konda rabochiy balonlar yo'q.", { reply_markup: userMenu });
+    await ctx.reply("😔 Hozircha yo'q.", { reply_markup: userMenu });
     return;
   }
-  let text = "🔄 <b>Rabochiy Balonlar</b>\n━━━━━━━━━━━━━━━━━━\n\n";
+  let text = "🔄 <b>Rabochiy balonlar</b>\n\n";
   for (const r of result.rows) {
     const holat = r.holat === 'yaxshi' ? '✅' : r.holat === 'orta' ? '🟡' : '🔴';
     text += `🛞 ${r.razmer} | ${r.balon_turi} — ${formatNumber(r.narx)} so'm ${holat}\n`;
@@ -1188,81 +1183,29 @@ bot.callbackQuery("user_go_rab", async (ctx) => {
   await ctx.reply(text, { reply_markup: userMenu, parse_mode: "HTML" });
 });
 
-// Barcha do'konlar — manzil matni, lokatsiyalar va "Bu do'konga kirish" tugmalari
-async function replyAllShopsManzil(ctx) {
-  const shops = await getAllShopsWithSettings();
-  if (shops.length === 0) {
-    await ctx.reply("Hozircha do'konlar ro'yxati bo'sh.", { reply_markup: userMenu });
-    return;
-  }
-  let text = "📍 <b>Barcha do'konlar</b>\n\n";
-  const kb = new InlineKeyboard();
-  for (const s of shops) {
-    text += `🏪 <b>${s.shopName}</b>\n🏠 ${s.address}\n🕐 ${s.workingHours}\n\n`;
-    kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
-  }
-  text += "👇 Lokatsiyalar pastda (agar mavjud bo'lsa).\n\nBu do'konga kirish uchun tugmani bosing:";
-  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
-  for (const s of shops) {
-    if (s.latitude != null && s.longitude != null) {
-      await ctx.replyWithLocation(s.latitude, s.longitude);
-    }
-  }
-  await ctx.reply("Quyidagi tugmalardan foydalaning:", { reply_markup: userMenu });
-}
-
-// Manzil - barcha do'konlar
-bot.hears("📍 Manzil", async (ctx) => {
-  await replyAllShopsManzil(ctx);
-});
-
-bot.callbackQuery("user_location", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await replyAllShopsManzil(ctx);
-});
-
-// Barcha do'konlar - aloqa (telefon, ish vaqti) va "Bu do'konga kirish"
-async function replyAllShopsAloqa(ctx) {
-  const shops = await getAllShopsWithSettings();
-  if (shops.length === 0) {
-    await ctx.reply("Hozircha do'konlar ro'yxati bo'sh.", { reply_markup: userMenu });
-    return;
-  }
-  let text = "📞 <b>Bog'lanish — barcha do'konlar</b>\n\n";
-  const kb = new InlineKeyboard();
-  for (const s of shops) {
-    text += `🏪 <b>${s.shopName}</b>\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
-    kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
-  }
-  text += "✅ Qo'ng'iroq qiling - bepul konsultatsiya!\n🚗 Yetkazib berish mavjud!\n\nBu do'konga kirish uchun tugmani bosing:";
-  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
-}
-
-// Aloqa - barcha do'konlar
-bot.hears("📞 Aloqa", async (ctx) => {
-  await replyAllShopsAloqa(ctx);
-});
-
+// Bog'lanish / Do'konlar (razmer detalidan inline)
 bot.callbackQuery("user_contact", async (ctx) => {
   await ctx.answerCallbackQuery();
-  await replyAllShopsAloqa(ctx);
+  await replyDokonlar(ctx);
 });
 
-// Yaqin do'konlar — lokatsiya so'rash
-bot.hears("📍 Yaqin do'konlar", async (ctx) => {
+bot.callbackQuery("user_dokonlar", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  await replyDokonlar(ctx);
+});
+
+// Yaqin do'konlar — faqat Do'konlar ekranidan (inline)
+bot.callbackQuery("user_nearby_shop_select", async (ctx) => {
+  await ctx.answerCallbackQuery();
   ctx.session.step = "user_nearby_shops";
   const locationKb = new Keyboard().requestLocation("📍 Joylashuvni yuborish").resized();
-  await ctx.reply(
-    "Lokatsiyangizni yuboring — sizga eng yaqin do'konlarni ko'rsatamiz.\n\n" +
-    "Quyidagi tugmani bosing va xaritadan joylashuvingizni tanlang:",
-    { reply_markup: locationKb }
-  );
+  await ctx.reply("📍 Joylashuvingizni yuboring — yaqin do'konlarni ko'rsatamiz.", { reply_markup: locationKb });
 });
 
-// "Barcha do'konlar" inline (yaqin do'konlar xabaridan keyin)
+// "Barcha do'konlar" (yaqin do'konlar natijasidan keyin)
 bot.callbackQuery("user_shops_all", async (ctx) => {
   await ctx.answerCallbackQuery();
-  await replyAllShopsManzil(ctx);
+  await replyDokonlar(ctx);
 });
 
 // Do'kon tanlash — ro'yxatdan yoki "Bu do'konga kirish" orqali
@@ -1273,23 +1216,12 @@ bot.callbackQuery(/^user_select_shop_(\d+)$/, async (ctx) => {
   if (row.rows.length === 0) return;
   ctx.session.userShopId = shopId;
   const shopName = await getSetting("shop_name", shopId) || row.rows[0].name;
-  await ctx.reply(`✅ Do'kon tanlandi: <b>${shopName}</b>\n\nEndi yangi balonlar, rabochiy balonlar va narxlarni shu do'kon uchun ko'rasiz.`, { reply_markup: userMenu, parse_mode: "HTML" });
+  await ctx.reply(`✅ Tanlandi: <b>${shopName}</b>`, { reply_markup: userMenu, parse_mode: "HTML" });
 });
 
-// Do'konni almashtirish — do'konlar ro'yxati
+// Do'konni almashtirish
 bot.hears("🔄 Do'konni almashtirish", async (ctx) => {
-  await showShopSelection(ctx, "Boshqa do'konni tanlang:");
-});
-
-// Yaqin do'konlar — do'kon tanlash ekranidan (inline)
-bot.callbackQuery("user_nearby_shop_select", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  ctx.session.step = "user_nearby_shops";
-  const locationKb = new Keyboard().requestLocation("📍 Joylashuvni yuborish").resized();
-  await ctx.reply(
-    "Lokatsiyangizni yuboring — sizga eng yaqin do'konlarni ko'rsatamiz.\n\nQuyidagi tugmani bosing va xaritadan joylashuvingizni tanlang:",
-    { reply_markup: locationKb }
-  );
+  await showShopSelection(ctx, "Do'kon tanlang:");
 });
 
 // ==================== BOSS: DO'KON TANLASH VA BOSHQARUV ====================
@@ -2628,19 +2560,18 @@ bot.on("message:location", async (ctx, next) => {
     const withLocation = sorted.filter((s) => s.distanceKm != null);
     const withoutLocation = sorted.filter((s) => s.distanceKm == null);
 
-    let text = "📍 <b>Sizga yaqin do'konlar</b>\n\n";
+    let text = "📍 <b>Yaqin do'konlar</b>\n\n";
     if (withLocation.length > 0) {
       for (const s of withLocation) {
         text += `🏪 <b>${s.shopName}</b> — ${s.distanceKm.toFixed(1)} km\n🏠 ${s.address}\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
       }
     }
     if (withoutLocation.length > 0) {
-      text += "━━━━━━━━━━━━━━━━━━\n<b>Boshqa do'konlar</b> (joylashuv kiritilmagan):\n\n";
+      text += "— Boshqa do'konlar —\n\n";
       for (const s of withoutLocation) {
         text += `🏪 <b>${s.shopName}</b>\n🏠 ${s.address}\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
       }
     }
-    text += "👇 Eng yaqin do'konlar lokatsiyasi pastda.\n\nBu do'konga kirish uchun tugmani bosing:";
     const kb = new InlineKeyboard();
     for (const s of sorted) {
       kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
@@ -2650,7 +2581,6 @@ bot.on("message:location", async (ctx, next) => {
     for (const s of withLocation) {
       await ctx.replyWithLocation(s.latitude, s.longitude);
     }
-    await ctx.reply("Quyidagi tugmalardan foydalaning:", { reply_markup: userMenu });
     return;
   }
 
@@ -2670,7 +2600,7 @@ bot.on("message:text", async (ctx, next) => {
       return;
     }
     const ins = await pool.query(
-      "INSERT INTO shops (name, phone, address, dollar_kurs, report_daily_time, report_weekly_day) VALUES ($1, '', '', '12800', '21:00', '5') RETURNING id",
+      "INSERT INTO shops (name, phone, address, dollar_kurs, report_daily_time, report_weekly_day, created_at, updated_at) VALUES ($1, '', '', '12800', '21:00', '5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
       [name]
     );
     const newShopId = ins.rows[0].id;
