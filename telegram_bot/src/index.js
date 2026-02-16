@@ -1406,18 +1406,20 @@ bot.callbackQuery(/^kb_(.+)$/, async (ctx) => {
   );
 });
 
-bot.callbackQuery("kirim_list", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  const shopId = getCurrentShopId(ctx);
-  const result = await pool.query("SELECT * FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 15", [shopId]);
+const KIRIM_CHIQIM_PAGE_SIZE = 20;
 
-  if (result.rows.length === 0) {
-    await ctx.reply("Kirim ro'yxati bo'sh");
-    return;
-  }
-
+async function buildKirimListPage(shopId, page) {
+  const totalRes = await pool.query("SELECT COUNT(*) as c FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+  const total = parseInt(totalRes.rows[0].c, 10);
+  if (total === 0) return { text: null, total, totalPages: 0, rows: [] };
+  const totalPages = Math.ceil(total / KIRIM_CHIQIM_PAGE_SIZE);
+  const offset = page * KIRIM_CHIQIM_PAGE_SIZE;
+  const result = await pool.query(
+    "SELECT * FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+    [shopId, KIRIM_CHIQIM_PAGE_SIZE, offset]
+  );
   const kurs = parseInt(await getSetting("dollar_kurs", shopId)) || 1;
-  let text = "<b>Kirimlar ro'yxati (so'ngi 15)</b>\n";
+  let text = `<b>Kirimlar</b> (${offset + 1}-${Math.min(offset + KIRIM_CHIQIM_PAGE_SIZE, total)} / ${total})\n`;
   text += "━━━━━━━━━━━━━━━━━━\n";
   for (const r of result.rows) {
     const inDollar = r.dollar_kurs === 1;
@@ -1429,9 +1431,33 @@ bot.callbackQuery("kirim_list", async (ctx) => {
     text += `📥 ${r.soni} ta | 💵 ${tanD} $ (${tanSom} so'm) | 💰 ${sotishD} $ (${sotishSom} so'm)\n`;
     text += `📅 ${formatDate(r.sana)}\n\n`;
   }
-  text += "━━━━━━━━━━━━━━━━━━\n";
-  text += "💡 Tahrirlash va o'chirish uchun Sozlamalar bo'limiga o'ting.";
-  await ctx.reply(text, { parse_mode: "HTML" });
+  text += "━━━━━━━━━━━━━━━━━━\n💡 Tahrirlash: Sozlamalar";
+  return { text, total, totalPages, rows: result.rows };
+}
+
+bot.callbackQuery("kirim_list", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = getCurrentShopId(ctx);
+  const { text, totalPages } = await buildKirimListPage(shopId, 0);
+  if (!text) {
+    await ctx.reply("Kirim ro'yxati bo'sh");
+    return;
+  }
+  const kb = new InlineKeyboard();
+  if (totalPages > 1) kb.text("Keyingi ▶", "kirim_list_p_1");
+  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
+});
+
+bot.callbackQuery(/^kirim_list_p_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const page = parseInt(ctx.match[1], 10);
+  const shopId = getCurrentShopId(ctx);
+  const { text, totalPages } = await buildKirimListPage(shopId, page);
+  if (!text) return;
+  const kb = new InlineKeyboard();
+  if (page > 0) kb.text("◀ Oldingi", `kirim_list_p_${page - 1}`);
+  if (page < totalPages - 1) kb.text("Keyingi ▶", `kirim_list_p_${page + 1}`);
+  await ctx.editMessageText(text, { reply_markup: kb, parse_mode: "HTML" });
 });
 
 bot.callbackQuery("kirim_som", async (ctx) => {
@@ -1534,17 +1560,17 @@ bot.callbackQuery(/^cb_(.+)$/, async (ctx) => {
   );
 });
 
-bot.callbackQuery("chiqim_list", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  const shopId = getCurrentShopId(ctx);
-  const result = await pool.query("SELECT * FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 15", [shopId]);
-
-  if (result.rows.length === 0) {
-    await ctx.reply("Sotuvlar ro'yxati bo'sh");
-    return;
-  }
-
-  let text = "<b>Sotuvlar ro'yxati (so'ngi 15)</b>\n";
+async function buildChiqimListPage(shopId, page) {
+  const totalRes = await pool.query("SELECT COUNT(*) as c FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+  const total = parseInt(totalRes.rows[0].c, 10);
+  if (total === 0) return { text: null, total, totalPages: 0, rows: [] };
+  const totalPages = Math.ceil(total / KIRIM_CHIQIM_PAGE_SIZE);
+  const offset = page * KIRIM_CHIQIM_PAGE_SIZE;
+  const result = await pool.query(
+    "SELECT * FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+    [shopId, KIRIM_CHIQIM_PAGE_SIZE, offset]
+  );
+  let text = `<b>Sotuvlar</b> (${offset + 1}-${Math.min(offset + KIRIM_CHIQIM_PAGE_SIZE, total)} / ${total})\n`;
   text += "━━━━━━━━━━━━━━━━━━\n";
   for (const r of result.rows) {
     text += `ID: <b>${r.id}</b> | 🛞 ${r.razmer} | ${r.balon_turi}\n`;
@@ -1561,9 +1587,33 @@ bot.callbackQuery("chiqim_list", async (ctx) => {
     }
     text += `\n📅 ${formatDate(r.sana)}\n\n`;
   }
-  text += "━━━━━━━━━━━━━━━━━━\n";
-  text += "💡 Tahrirlash va o'chirish uchun Sozlamalar bo'limiga o'ting.";
-  await ctx.reply(text, { parse_mode: "HTML" });
+  text += "━━━━━━━━━━━━━━━━━━\n💡 Tahrirlash: Sozlamalar";
+  return { text, total, totalPages, rows: result.rows };
+}
+
+bot.callbackQuery("chiqim_list", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = getCurrentShopId(ctx);
+  const { text, totalPages } = await buildChiqimListPage(shopId, 0);
+  if (!text) {
+    await ctx.reply("Sotuvlar ro'yxati bo'sh");
+    return;
+  }
+  const kb = new InlineKeyboard();
+  if (totalPages > 1) kb.text("Keyingi ▶", "chiqim_list_p_1");
+  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
+});
+
+bot.callbackQuery(/^chiqim_list_p_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const page = parseInt(ctx.match[1], 10);
+  const shopId = getCurrentShopId(ctx);
+  const { text, totalPages } = await buildChiqimListPage(shopId, page);
+  if (!text) return;
+  const kb = new InlineKeyboard();
+  if (page > 0) kb.text("◀ Oldingi", `chiqim_list_p_${page - 1}`);
+  if (page < totalPages - 1) kb.text("Keyingi ▶", `chiqim_list_p_${page + 1}`);
+  await ctx.editMessageText(text, { reply_markup: kb, parse_mode: "HTML" });
 });
 
 // XISOBOT
@@ -3690,65 +3740,161 @@ bot.callbackQuery(/^editdel_f_(.+)$/, async (ctx) => {
   ctx.session.step = "editdel_value";
 });
 
-// Ro'yxat ko'rsatish: jadval tanlanganda avval yozuvlar ro'yxati chiqadi, keyin ID so'raladi
-async function sendEditDelListAndAskId(ctx, tableName, shopId) {
-  const LIMIT = 35;
+const EDITDEL_PAGE_SIZE = 35;
+
+async function sendEditDelListAndAskId(ctx, tableName, shopId, page = 0) {
   let listMsg = "";
-  let rows = [];
+  let total = 0;
+  let totalPages = 1;
+  const paginatedTables = ["kirim", "chiqim", "rabochiy_balon", "rabochiy_sotuv"];
+
   if (tableName === "kirim") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
     const r = await pool.query(
-      "SELECT id, razmer, balon_turi, soni, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
-      [shopId, LIMIT]
+      "SELECT id, razmer, balon_turi, soni, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
     );
-    rows = r.rows;
-    listMsg = "📥 <b>Kirim</b> (so'nggi " + rows.length + " ta):\n\n";
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "📥 <b>Kirim</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta (${formatSana(x.sana)})\n`;
   } else if (tableName === "chiqim") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
     const r = await pool.query(
-      "SELECT id, razmer, balon_turi, sotildi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
-      [shopId, LIMIT]
+      "SELECT id, razmer, balon_turi, sotildi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
     );
-    rows = r.rows;
-    listMsg = "📤 <b>Chiqim</b> (so'nggi " + rows.length + " ta):\n\n";
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "📤 <b>Chiqim</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.sotildi} ta (${formatSana(x.sana)})\n`;
   } else if (tableName === "olinish_kerak") {
     const r = await pool.query(
       "SELECT id, razmer, balon_turi, soni FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id",
       [shopId]
     );
-    rows = r.rows;
+    const rows = r.rows;
     listMsg = "🛒 <b>Olinishi kerak</b>:\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta\n`;
   } else if (tableName === "sizes") {
     const r = await pool.query("SELECT id, name FROM sizes ORDER BY id");
-    rows = r.rows;
+    const rows = r.rows;
     listMsg = "📏 <b>Razmerlar</b>:\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.name}\n`;
   } else if (tableName === "brands") {
     const r = await pool.query("SELECT id, name FROM brands ORDER BY id");
-    rows = r.rows;
+    const rows = r.rows;
     listMsg = "🏷 <b>Brendlar</b>:\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.name}\n`;
   } else if (tableName === "rabochiy_balon") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
     const r = await pool.query(
-      "SELECT id, razmer, balon_turi, soni, narx, holat FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
-      [shopId, LIMIT]
+      "SELECT id, razmer, balon_turi, soni, narx, holat FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
     );
-    rows = r.rows;
-    listMsg = "🔄 <b>Rabochiy balon</b> (so'nggi " + rows.length + " ta):\n\n";
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "🔄 <b>Rabochiy balon</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta, ${formatNumber(x.narx)} so'm (${x.holat || ""})\n`;
   } else if (tableName === "rabochiy_sotuv") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
     const r = await pool.query(
-      "SELECT id, razmer, balon_turi, olingan_narx, sotilgan_narx, sana FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2",
-      [shopId, LIMIT]
+      "SELECT id, razmer, balon_turi, olingan_narx, sotilgan_narx, sana FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
     );
-    rows = r.rows;
-    listMsg = "🔄 <b>Rabochiy sotuv</b> (so'nggi " + rows.length + " ta):\n\n";
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "🔄 <b>Rabochiy sotuv</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} (${formatSana(x.sana)})\n`;
   }
-  if (listMsg) await ctx.reply(listMsg, { parse_mode: "HTML" });
+
+  const kb = new InlineKeyboard();
+  if (paginatedTables.includes(tableName) && totalPages > 1 && page === 0) {
+    kb.text("Keyingi ▶", `editdel_list_${tableName}_1`);
+  }
+  if (listMsg) await ctx.reply(listMsg, { parse_mode: "HTML", reply_markup: kb });
   await ctx.reply("ID ni kiriting (o'chirish yoki tahrirlash uchun yuqoridagi ro'yxatdan):", { reply_markup: backBtn });
 }
+
+bot.callbackQuery(/^editdel_list_(kirim|chiqim|rabochiy_balon|rabochiy_sotuv)_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const tableName = ctx.match[1];
+  const page = parseInt(ctx.match[2], 10);
+  const shopId = getCurrentShopId(ctx);
+  let listMsg = "";
+  let total = 0;
+  let totalPages = 1;
+
+  if (tableName === "kirim") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, soni, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
+    );
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "📥 <b>Kirim</b> (" + from + "-" + to + " / " + total + "):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta (${formatSana(x.sana)})\n`;
+  } else if (tableName === "chiqim") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, sotildi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
+    );
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "📤 <b>Chiqim</b> (" + from + "-" + to + " / " + total + "):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.sotildi} ta (${formatSana(x.sana)})\n`;
+  } else if (tableName === "rabochiy_balon") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, soni, narx, holat FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
+    );
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "🔄 <b>Rabochiy balon</b> (" + from + "-" + to + " / " + total + "):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta, ${formatNumber(x.narx)} so'm (${x.holat || ""})\n`;
+  } else if (tableName === "rabochiy_sotuv") {
+    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
+    total = parseInt(countR.rows[0].c, 10);
+    totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
+    const r = await pool.query(
+      "SELECT id, razmer, balon_turi, olingan_narx, sotilgan_narx, sana FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
+      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
+    );
+    const rows = r.rows;
+    const from = page * EDITDEL_PAGE_SIZE + 1;
+    const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
+    listMsg = "🔄 <b>Rabochiy sotuv</b> (" + from + "-" + to + " / " + total + "):\n\n";
+    for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} (${formatSana(x.sana)})\n`;
+  }
+  const kb = new InlineKeyboard();
+  if (page > 0) kb.text("◀ Oldingi", `editdel_list_${tableName}_${page - 1}`);
+  if (page < totalPages - 1) kb.text("Keyingi ▶", `editdel_list_${tableName}_${page + 1}`);
+  await ctx.reply(listMsg, { parse_mode: "HTML", reply_markup: kb });
+});
 
 bot.callbackQuery(/^editdel_(kirim|chiqim|ol|size|brand|rabochiy_balon|rabochiy_sotuv)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
