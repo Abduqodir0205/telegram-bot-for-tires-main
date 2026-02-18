@@ -365,6 +365,12 @@ async function showShopSelection(ctx, text = "Do'kon tanlang:") {
   await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
 }
 
+/** User do'kon tanlamagan bo'lsa: minimal klaviaturani ko'rsatib, do'kon tanlash ekranini ochish */
+async function askUserToSelectShop(ctx, text = "Avval do'kon tanlang:") {
+  await ctx.reply(text, { reply_markup: userNoShopMenu, parse_mode: "HTML" });
+  await showShopSelection(ctx);
+}
+
 /** Haversine: ikki nuqta orasidagi masofa (km) */
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -375,6 +381,13 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+/** Geografik koordinatalarni tekshirish (latitude -90..90, longitude -180..180) */
+function isValidLatLon(lat, lon) {
+  const la = Number(lat);
+  const lo = Number(lon);
+  return !isNaN(la) && la >= -90 && la <= 90 && !isNaN(lo) && lo >= -180 && lo <= 180;
 }
 
 /** Barcha do'konlar ro'yxati (id, name, address, phone, lat, lon, working_hours, shop_name) */
@@ -391,6 +404,9 @@ async function getAllShopsWithSettings() {
     const shopName = await getSetting("shop_name", shopId) || row.name;
     const lat = latStr ? parseFloat(latStr) : NaN;
     const lon = lonStr ? parseFloat(lonStr) : NaN;
+    // Faqat to'g'ri diapazondagi koordinatalar (lat, lon almashtirilmasligi uchun)
+    const latitude = isValidLatLon(lat, lon) ? lat : null;
+    const longitude = isValidLatLon(lat, lon) ? lon : null;
     list.push({
       id: shopId,
       name: row.name,
@@ -398,15 +414,16 @@ async function getAllShopsWithSettings() {
       address: address || "-",
       phone: phone || "-",
       workingHours: workingHours || "-",
-      latitude: !isNaN(lat) ? lat : null,
-      longitude: !isNaN(lon) ? lon : null,
+      latitude,
+      longitude,
     });
   }
   return list;
 }
 
-/** User lokatsiyasiga qarab do'konlarni yaqinlik bo'yicha saralash (lokatsiyasi borlar avval, km bo'yicha) */
+/** User lokatsiyasiga qarab do'konlarni yaqinlik bo'yicha saralash (haversine: userLat, userLon, shopLat, shopLon) */
 async function getShopsSortedByDistance(userLat, userLon) {
+  if (!isValidLatLon(userLat, userLon)) return getAllShopsWithSettings();
   const list = await getAllShopsWithSettings();
   const withLocation = [];
   const withoutLocation = [];
@@ -418,14 +435,17 @@ async function getShopsSortedByDistance(userLat, userLon) {
       withoutLocation.push({ ...s, distanceKm: null });
     }
   }
-  withLocation.sort((a, b) => a.distanceKm - b.distanceKm);
+  withLocation.sort((a, b) => {
+    const d = a.distanceKm - b.distanceKm;
+    return d !== 0 ? d : (a.shopName || "").localeCompare(b.shopName || "");
+  });
   return [...withLocation, ...withoutLocation];
 }
 
-/** Foydalanuvchi turi bo'yicha bosh menyu (user / admin / boss) */
+/** Foydalanuvchi turi bo'yicha bosh menyu (user / admin / boss). User do'kon tanlamaguncha faqat "Do'kon tanlang". */
 async function getMainMenu(ctx) {
   if (ctx.from && (await isAdmin(ctx.from.id))) return isBoss(ctx.from.id) ? bossMenu : adminMenu;
-  return userMenu;
+  return (await getUserShopId(ctx) != null) ? userMenu : userNoShopMenu;
 }
 
 async function getAllSizes() {
@@ -660,10 +680,16 @@ const bossMenu = new Keyboard()
   .text("⚙️ Sozlamalar")
   .resized();
 
+// User panel: do'kon tanlanganida to'liq menyu (Yaqin do'konlar — reply tugma, xabardan emas)
 const userMenu = new Keyboard()
-  .text("🛞 Yangi Balonlar").text("🔄 Rabochiy Balonlar").row()
-  .text("📍 Do'konlar").text("🚗 Mashinam uchun").row()
-  .text("🔄 Do'konni almashtirish")
+  .text("📍 Do'konlar").text("🛞 Yangi Balonlar").row()
+  .text("🔄 Rabochiy Balonlar").text("🚗 Mashinam uchun").row()
+  .text("📍 Yaqin do'konlar")
+  .resized();
+
+// Do'kon tanlanmaguncha: faqat shu tugma (chalkashlik bo'lmasin)
+const userNoShopMenu = new Keyboard()
+  .text("📍 Do'kon tanlang")
   .resized();
 
 // Mashina modeli bo'yicha shina razmerlari ma'lumoti (userlar uchun)
@@ -889,7 +915,7 @@ bot.command("start", async (ctx) => {
   } else {
     const userShopId = ctx.session?.userShopId;
     if (userShopId == null) {
-      await ctx.reply("🛞 Salom! Narxlarni ko'rish uchun do'kon tanlang:", { parse_mode: "HTML" });
+      await ctx.reply("🛞 Salom! Narxlarni ko'rish uchun do'kon tanlang:", { reply_markup: userNoShopMenu, parse_mode: "HTML" });
       await showShopSelection(ctx);
       return;
     }
@@ -902,8 +928,14 @@ bot.hears("🔙 Ortga", async (ctx) => {
   ctx.session.step = null;
   ctx.session.data = {};
   const isAd = await isAdmin(ctx.from.id);
-  const kb = isAd ? (isBoss(ctx.from.id) ? bossMenu : adminMenu) : userMenu;
+  const kb = isAd ? (isBoss(ctx.from.id) ? bossMenu : adminMenu) : (await getUserShopId(ctx) != null ? userMenu : userNoShopMenu);
   await ctx.reply("Bosh menyu", { reply_markup: kb });
+});
+
+// Do'kon tanlanmagan user faqat shu tugmani ko'radi — bosganda do'kon ro'yxati ochiladi
+bot.hears("📍 Do'kon tanlang", async (ctx) => {
+  if (await isAdmin(ctx.from.id)) return;
+  await showShopSelection(ctx, "Do'kon tanlang:");
 });
 
 // ==================== USER PANEL ====================
@@ -977,8 +1009,7 @@ bot.callbackQuery("qidiruv_eski", async (ctx) => {
 bot.hears("🛞 Yangi Balonlar", async (ctx) => {
   const shopId = await getUserShopId(ctx);
   if (shopId == null) {
-    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
-    await showShopSelection(ctx);
+    await askUserToSelectShop(ctx, "Avval do'kon tanlang.");
     return;
   }
 
@@ -1001,8 +1032,7 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
   const razmer = ctx.match[1];
   const shopId = await getUserShopId(ctx);
   if (shopId == null) {
-    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
-    await showShopSelection(ctx);
+    await askUserToSelectShop(ctx, "Avval do'kon tanlang.");
     return;
   }
 
@@ -1030,8 +1060,7 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
 bot.hears("🔄 Rabochiy Balonlar", async (ctx) => {
   const shopId = await getUserShopId(ctx);
   if (shopId == null) {
-    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
-    await showShopSelection(ctx);
+    await askUserToSelectShop(ctx, "Avval do'kon tanlang.");
     return;
   }
 
@@ -1116,26 +1145,36 @@ bot.callbackQuery("car_tire_back", async (ctx) => {
   await ctx.reply("🚗 Mashinangizni tanlang:", { reply_markup: kb, parse_mode: "HTML" });
 });
 
-// Bitta "Do'konlar" ekrani: manzil, telefon, ish vaqti, Yaqin do'konlar + Kirish tugmalari
-async function replyDokonlar(ctx) {
+const SHOPS_PAGE_SIZE = 8;
+
+// Do'konlar ro'yxati — sahifalangan (yuklama tushmasligi uchun)
+async function replyDokonlar(ctx, page = 0) {
   const shops = await getAllShopsWithSettings();
   if (shops.length === 0) {
     await ctx.reply("Hozircha do'konlar yo'q.", { reply_markup: userMenu });
     return;
   }
-  let text = "📍 <b>Do'konlar</b>\n\n";
+  const totalPages = Math.ceil(shops.length / SHOPS_PAGE_SIZE) || 1;
+  const safePage = Math.max(0, Math.min(page, totalPages - 1));
+  const from = safePage * SHOPS_PAGE_SIZE;
+  const to = Math.min(from + SHOPS_PAGE_SIZE, shops.length);
+  const pageShops = shops.slice(from, to);
+
+  let text = `📍 <b>Do'konlar</b> (${from + 1}–${to} / ${shops.length})\n\n`;
   const kb = new InlineKeyboard();
-  for (const s of shops) {
+  for (const s of pageShops) {
     text += `🏪 <b>${s.shopName}</b>\n🏠 ${s.address}\n📱 ${s.phone}\n🕐 ${s.workingHours}\n\n`;
-    kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
-  }
-  kb.text("📍 Yaqin do'konlar", "user_nearby_shop_select");
-  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
-  for (const s of shops) {
     if (s.latitude != null && s.longitude != null) {
-      await ctx.replyWithLocation(s.latitude, s.longitude);
+      kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).text("📍 Lokatsiya", `user_shop_location_${s.id}`).row();
+    } else {
+      kb.text(`🏪 ${s.shopName} — kirish`, `user_select_shop_${s.id}`).row();
     }
   }
+  if (totalPages > 1) {
+    if (safePage > 0) kb.text("◀ Oldingi", `user_shops_page_${safePage - 1}`);
+    if (safePage < totalPages - 1) kb.text("Keyingi ▶", `user_shops_page_${safePage + 1}`);
+  }
+  await ctx.reply(text, { reply_markup: kb, parse_mode: "HTML" });
 }
 
 bot.hears("📍 Do'konlar", async (ctx) => {
@@ -1143,13 +1182,25 @@ bot.hears("📍 Do'konlar", async (ctx) => {
   await replyDokonlar(ctx);
 });
 
+// Yaqin do'konlar — reply tugma (xabardagi inline emas, bir marta bosganda joylashuv so'raladi)
+bot.hears("📍 Yaqin do'konlar", async (ctx) => {
+  if (await isAdmin(ctx.from.id)) return;
+  const shopId = await getUserShopId(ctx);
+  if (shopId == null) {
+    await askUserToSelectShop(ctx, "Avval do'kon tanlang.");
+    return;
+  }
+  ctx.session.step = "user_nearby_shops";
+  const locationKb = new Keyboard().requestLocation("📍 Joylashuvni yuborish").resized();
+  await ctx.reply("📍 Joylashuvingizni yuboring — yaqin do'konlarni ko'rsatamiz.", { reply_markup: locationKb });
+});
+
 // Mashina ma'lumotidan keyin Yangi/Rabochiy balonlarga o'tish (tanlangan do'kon)
 bot.callbackQuery("user_go_new", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = await getUserShopId(ctx);
   if (shopId == null) {
-    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
-    await showShopSelection(ctx);
+    await askUserToSelectShop(ctx, "Avval do'kon tanlang.");
     return;
   }
   const sizesWithStock = await getSizesWithStock(shopId);
@@ -1166,8 +1217,7 @@ bot.callbackQuery("user_go_rab", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = await getUserShopId(ctx);
   if (shopId == null) {
-    await ctx.reply("Avval do'kon tanlang.", { parse_mode: "HTML" });
-    await showShopSelection(ctx);
+    await askUserToSelectShop(ctx, "Avval do'kon tanlang.");
     return;
   }
   const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY razmer", [shopId]);
@@ -1205,7 +1255,26 @@ bot.callbackQuery("user_nearby_shop_select", async (ctx) => {
 // "Barcha do'konlar" (yaqin do'konlar natijasidan keyin)
 bot.callbackQuery("user_shops_all", async (ctx) => {
   await ctx.answerCallbackQuery();
-  await replyDokonlar(ctx);
+  await replyDokonlar(ctx, 0);
+});
+
+// Do'konlar sahifalash (Keyingi / Oldingi)
+bot.callbackQuery(/^user_shops_page_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const page = parseInt(ctx.match[1], 10);
+  await replyDokonlar(ctx, page);
+});
+
+// Faqat o'sha do'konning lokatsiyasini yuborish (chalkashmaslik uchun)
+bot.callbackQuery(/^user_shop_location_(\d+)$/, async (ctx) => {
+  await ctx.answerCallbackQuery();
+  const shopId = parseInt(ctx.match[1], 10);
+  const shops = await getAllShopsWithSettings();
+  const shop = shops.find((s) => s.id === shopId);
+  if (!shop || shop.latitude == null || shop.longitude == null) {
+    return ctx.reply("Bu do'kon uchun lokatsiya topilmadi.");
+  }
+  await ctx.replyWithLocation(shop.latitude, shop.longitude);
 });
 
 // Do'kon tanlash — ro'yxatdan yoki "Bu do'konga kirish" orqali
@@ -1217,11 +1286,6 @@ bot.callbackQuery(/^user_select_shop_(\d+)$/, async (ctx) => {
   ctx.session.userShopId = shopId;
   const shopName = await getSetting("shop_name", shopId) || row.rows[0].name;
   await ctx.reply(`✅ Tanlandi: <b>${shopName}</b>`, { reply_markup: userMenu, parse_mode: "HTML" });
-});
-
-// Do'konni almashtirish
-bot.hears("🔄 Do'konni almashtirish", async (ctx) => {
-  await showShopSelection(ctx, "Do'kon tanlang:");
 });
 
 // ==================== BOSS: DO'KON TANLASH VA BOSHQARUV ====================
@@ -2875,6 +2939,39 @@ bot.on("message:text", async (ctx, next) => {
     return;
   }
 
+  // ID oralig'ida o'chirish (masalan: 1 10 yoki 1-10)
+  if (step === "editdel_range") {
+    ctx.session.data = ctx.session.data || {};
+    const table = ctx.session.data.editdel_table;
+    if (!table) {
+      ctx.session.step = null;
+      ctx.session.data = {};
+      return;
+    }
+    const parts = String(text).trim().replace(/-/g, " ").split(/\s+/).filter(Boolean);
+    const minId = parts.length >= 1 ? parseInt(parts[0], 10) : NaN;
+    const maxId = parts.length >= 2 ? parseInt(parts[1], 10) : parseInt(parts[0], 10);
+    if (isNaN(minId) || isNaN(maxId) || minId < 1 || maxId < 1 || minId > maxId) {
+      await ctx.reply("❌ Min va max ID ni to'g'ri kiriting (masalan: 1 10). Min ≤ max bo'lishi kerak.");
+      return;
+    }
+    const shopId = getCurrentShopId(ctx);
+    const tablesWithShop = ["kirim", "chiqim", "olinish_kerak", "rabochiy_balon", "rabochiy_sotuv"];
+    const hasShop = tablesWithShop.includes(table);
+    try {
+      const res = hasShop
+        ? await pool.query(`DELETE FROM ${table} WHERE id >= $1 AND id <= $2 AND (shop_id IS NULL OR shop_id = $3)`, [minId, maxId, shopId])
+        : await pool.query(`DELETE FROM ${table} WHERE id >= $1 AND id <= $2`, [minId, maxId]);
+      const n = res.rowCount || 0;
+      await ctx.reply(`🗑 O'chirildi: ${table} jadvalida ${n} ta yozuv (ID ${minId}–${maxId}).`, { reply_markup: adminMenu });
+    } catch (e) {
+      await ctx.reply("❌ O'chirishda xatolik: " + (e.message || e));
+    }
+    ctx.session.step = null;
+    ctx.session.data = {};
+    return;
+  }
+
   // O'chirish/tahrirlash uchun ID kiritish
   if (step === "editdel_id") {
     ctx.session.data = ctx.session.data || {};
@@ -3909,10 +4006,79 @@ bot.callbackQuery(/^editdel_(kirim|chiqim|ol|size|brand|rabochiy_balon|rabochiy_
     rabochiy_sotuv: "rabochiy_sotuv"
   };
   const t = ctx.match[1];
-  ctx.session.data.editdel_table = tableMap[t];
+  const tableName = tableMap[t];
+  ctx.session.data.editdel_table = tableName;
+  ctx.session.step = null;
+  const kb = new InlineKeyboard()
+    .text("1️⃣ Bitta ID (o'chirish/tahrirlash)", "editdel_mode_one").row()
+    .text("2️⃣ ID oralig'i (masalan 1–10)", "editdel_mode_range").row()
+    .text("3️⃣ Jadvalni to'liq tozalash", "editdel_mode_clear").row()
+    .text("🔙 Orqaga", "settings_editdel");
+  await ctx.reply(`Jadval: <b>${tableName}</b>. Qanday amal qilamiz?`, { reply_markup: kb, parse_mode: "HTML" });
+});
+
+bot.callbackQuery("editdel_mode_one", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.data = ctx.session.data || {};
+  const table = ctx.session.data.editdel_table;
+  if (!table) return ctx.reply("❌ Jadval tanlanmagan.");
   ctx.session.step = "editdel_id";
   const shopId = getCurrentShopId(ctx);
-  await sendEditDelListAndAskId(ctx, tableMap[t], shopId);
+  await sendEditDelListAndAskId(ctx, table, shopId);
+});
+
+bot.callbackQuery("editdel_mode_range", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.data = ctx.session.data || {};
+  const table = ctx.session.data.editdel_table;
+  if (!table) return ctx.reply("❌ Jadval tanlanmagan.");
+  ctx.session.step = "editdel_range";
+  await ctx.reply(
+    "Min va max ID ni kiriting (probel yoki tire bilan, masalan: <code>1 10</code> yoki <code>1-10</code>):",
+    { parse_mode: "HTML", reply_markup: new InlineKeyboard().text("🔙 Bekor qilish", "settings_editdel") }
+  );
+});
+
+bot.callbackQuery("editdel_mode_clear", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.data = ctx.session.data || {};
+  const table = ctx.session.data.editdel_table;
+  if (!table) return ctx.reply("❌ Jadval tanlanmagan.");
+  const shopId = getCurrentShopId(ctx);
+  const tablesWithShop = ["kirim", "chiqim", "olinish_kerak", "rabochiy_balon", "rabochiy_sotuv"];
+  const hasShop = tablesWithShop.includes(table);
+  const countRes = hasShop
+    ? await pool.query(`SELECT COUNT(*) as c FROM ${table} WHERE (shop_id IS NULL OR shop_id = $1)`, [shopId])
+    : await pool.query(`SELECT COUNT(*) as c FROM ${table}`);
+  const count = parseInt(countRes.rows[0].c, 10);
+  const kb = new InlineKeyboard()
+    .text("✅ Ha, barchasini o'chirish", "editdel_clear_yes").row()
+    .text("🔙 Bekor qilish", "settings_editdel");
+  await ctx.reply(
+    `⚠️ <b>${table}</b> jadvalida <b>${count}</b> ta yozuv bor. Barchasini o'chirishni xohlaysizmi?`,
+    { reply_markup: kb, parse_mode: "HTML" }
+  );
+});
+
+bot.callbackQuery("editdel_clear_yes", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  ctx.session.data = ctx.session.data || {};
+  const table = ctx.session.data.editdel_table;
+  if (!table) return ctx.reply("❌ Jadval tanlanmagan.");
+  const shopId = getCurrentShopId(ctx);
+  const tablesWithShop = ["kirim", "chiqim", "olinish_kerak", "rabochiy_balon", "rabochiy_sotuv"];
+  const hasShop = tablesWithShop.includes(table);
+  try {
+    const res = hasShop
+      ? await pool.query(`DELETE FROM ${table} WHERE (shop_id IS NULL OR shop_id = $1)`, [shopId])
+      : await pool.query(`DELETE FROM ${table}`);
+    const n = res.rowCount || 0;
+    await ctx.reply(`🗑 <b>${table}</b> jadvali tozalandi. O'chirildi: ${n} ta yozuv.`, { parse_mode: "HTML", reply_markup: adminMenu });
+  } catch (e) {
+    await ctx.reply("❌ O'chirishda xatolik: " + (e.message || e));
+  }
+  ctx.session.step = null;
+  ctx.session.data = {};
 });
 
 // ==================== AVTOMATIK HISOBOT (CRON) ====================
