@@ -467,6 +467,7 @@ async function getStock(razmer, balon_turi, shopId = 1) {
   return Number(r.rows[0]?.qoldiq ?? 0);
 }
 
+// User va admin uchun sotish narxi (kirim jadvalidagi sotish_narx = tan_narx + ustama)
 async function getSotishNarx(razmer, balon_turi, shopId = 1) {
   const result = await pool.query(
     "SELECT sotish_narx, dollar_kurs FROM kirim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3) ORDER BY id DESC LIMIT 1",
@@ -634,10 +635,11 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
     ctx.session.data = {};
     return;
   }
-  // Birinchi marta kirim kiritilganda default sotish narxini (so'm) saqlaymiz — kurs o'zgasa ham bu summa o'zgarmaydi
+  // Birinchi marta kirimda ustama sozlanmagan bo'lsa: sotish - tan = ustama, shuni default qilib saqlaymiz
   const existingDefault = await getSetting("default_sotish_narx_som", shopId);
   if (!existingDefault || existingDefault === "" || existingDefault === "0") {
-    await setSetting("default_sotish_narx_som", String(sotishSom), shopId);
+    const margin = Math.max(0, sotishSom - kelganSomXom);
+    await setSetting("default_sotish_narx_som", String(margin), shopId);
   }
   ctx.session.step = null;
   ctx.session.data = {};
@@ -862,8 +864,11 @@ const CAR_TIRE_WARNING = `\n\n⚠️ <b>DIQQAT:</b> Shina o'lchami zavod tavsiya
 
 const backBtn = new Keyboard().text("🔙 Ortga").resized();
 
+// Razmerlar ro'yxatida sozlamalar/bo'sh nomlar chiqmasin (Kirim, Chiqim, Olinish kerak)
+const SKIP_SIZE_NAMES = /^(sozlamalar|⚙️\s*sozlamalar|settings)$/i;
 async function sizeKeyboard(prefix = "size") {
-  const sizes = await getAllSizes();
+  const raw = await getAllSizes();
+  const sizes = raw.filter((s) => s && !SKIP_SIZE_NAMES.test(String(s).trim()));
   const kb = new InlineKeyboard();
   for (let i = 0; i < sizes.length; i += 2) {
     if (sizes[i + 1]) {
@@ -875,8 +880,11 @@ async function sizeKeyboard(prefix = "size") {
   return kb;
 }
 
+// Brendlar ro'yxatida sozlamalar chiqmasin
+const SKIP_BRAND_NAMES = /^(sozlamalar|⚙️\s*sozlamalar|settings)$/i;
 async function brandKeyboard(prefix = "brand") {
-  const brands = await getAllBrands();
+  const raw = await getAllBrands();
+  const brands = raw.filter((b) => b && !SKIP_BRAND_NAMES.test(String(b).trim()));
   const kb = new InlineKeyboard();
   for (const brand of brands) {
     kb.text(brand, `${prefix}_${brand}`).row();
@@ -2120,17 +2128,18 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         { header: "Soni", key: "soni", width: 8 },
         { header: "Kelgan narx ($)", key: "kelgan_narx", width: 14 },
         { header: "Sotish narx ($)", key: "sotish_narx", width: 14 },
-        { header: "Umumiy qiymat ($)", key: "umumiy_qiymat", width: 16 },
+        { header: "Jami tan narx ($)", key: "jami_tan_narx", width: 16 },
         { header: "Sana", key: "sana", width: 12 },
         { header: "Kurs", key: "dollar_kurs", width: 8 }
       ];
       result.rows.forEach((row) => {
         const inDollar = row.dollar_kurs === 1;
+        const jamiTanNarx = Number(row.kelgan_narx) * Number(row.soni);
         sheet.addRow({
           ...row,
           kelgan_narx: inDollar ? row.kelgan_narx : toDollar(row.kelgan_narx, kurs),
           sotish_narx: inDollar ? row.sotish_narx : toDollar(row.sotish_narx, kurs),
-          umumiy_qiymat: inDollar ? row.umumiy_qiymat : toDollar(row.umumiy_qiymat, kurs)
+          jami_tan_narx: inDollar ? jamiTanNarx : toDollar(jamiTanNarx, kurs)
         });
       });
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `kirim_${periodType}_${dateStr}.xlsx`));
@@ -2776,7 +2785,7 @@ bot.on("message:text", async (ctx, next) => {
     await setSetting("default_sotish_narx_som", String(num), shopId);
     ctx.session.step = null;
     const menu = isBoss(ctx.from.id) ? bossMenu : adminMenu;
-    await ctx.reply(`✅ Sotish narxi yangilandi: ${formatNumber(num)} so'm. Keyingi kirimlarda shu narx ishlatiladi.`, { reply_markup: menu });
+    await ctx.reply(`✅ Ustama yangilandi: ${formatNumber(num)} so'm. Keyingi kirimlarda sotish narxi = tan narx + ${formatNumber(num)} so'm.`, { reply_markup: menu });
     return;
   }
   // Sozlamalar - Do'kon nomi
@@ -3091,7 +3100,7 @@ bot.on("message:text", async (ctx, next) => {
     );
     return;
   }
-  // Kirim - kelgan narx (1 dona). Agar do'konda default sotish narxi (so'm) bo'lsa so'ramaymiz.
+  // Kirim - kelgan narx (1 dona). Default = tan narxiga qo'shiladigan ustama (so'm); sotish_narx = tan_narx + default.
   if (step === "kirim_kelgan_narx") {
     const num = parseFloat(text.replace(/\s/g, "").replace(",", "."));
     if (isNaN(num) || num < 0) {
@@ -3100,20 +3109,23 @@ bot.on("message:text", async (ctx, next) => {
     }
     ctx.session.data.kelgan_narx_input = num;
     const shopId = getCurrentShopId(ctx);
-    const defaultSotishSom = await getSetting("default_sotish_narx_som", shopId);
-    const defaultNum = defaultSotishSom ? parseInt(String(defaultSotishSom).replace(/\s/g, ""), 10) : NaN;
-    if (!isNaN(defaultNum) && defaultNum > 0) {
-      // Keyingi tavarlar — sotish narxini so'ramaymiz, default (so'm) ishlatamiz (kurs o'zgasa ham o'sha summa o'zgarmaydi)
+    const kurs = parseInt(await getSetting("dollar_kurs", shopId)) || 1;
+    const kelganSom = ctx.session.data.narx_type === "dollar" ? Math.round(num * kurs) : Math.round(num);
+    const defaultMarginSom = await getSetting("default_sotish_narx_som", shopId);
+    const marginNum = defaultMarginSom ? parseInt(String(defaultMarginSom).replace(/\s/g, ""), 10) : NaN;
+    if (!isNaN(marginNum) && marginNum >= 0) {
+      // Sotish narx = tan narx + ustama (default)
+      const sotishSom = kelganSom + marginNum;
       await ctx.api.sendChatAction(ctx.chat.id, "typing");
-      await saveKirimWithSotishNarx(ctx, defaultNum, "som");
+      await saveKirimWithSotishNarx(ctx, sotishSom, "som");
       return;
     }
-    // Birinchi mahsulot — sotish narxini faqat so'mda so'raymiz
+    // Ustama sozlanmagan — sotish narxini so'raymiz (birinchi marta saqlaganda ustama hisoblanib saqlanadi)
     ctx.session.step = "kirim_sotish_narx";
     ctx.session.data.sotish_type = "som";
     await ctx.api.sendChatAction(ctx.chat.id, "typing");
     await ctx.reply(
-      `✅ Tan narx: <b>${num}</b> ${ctx.session.data.narx_type === "dollar" ? "$" : "so'm"}\n\n💰 <b>Sotish narxini</b> kiriting (1 dona, so'm). Keyingi mahsulotlarda shu narx ishlatiladi, sozlamalardan o'zgartirish mumkin.`,
+      `✅ Tan narx: <b>${num}</b> ${ctx.session.data.narx_type === "dollar" ? "$" : "so'm"} (= ${formatNumber(kelganSom)} so'm)\n\n💰 <b>Sotish narxini</b> kiriting (1 dona, so'm). Keyingi kirimlarda tan narx + shu ustama ishlatiladi.`,
       { reply_markup: backBtn, parse_mode: "HTML" }
     );
     return;
@@ -3588,13 +3600,13 @@ bot.hears("⚙️ Sozlamalar", async (ctx) => {
     `📞 Telefon: ${phone || '-'}\n` +
     `📍 Manzil: ${address || '-'}\n` +
     `💵 Dollar kursi: ${dollarKurs ? formatNumber(dollarKurs) + ' so\'m' : '-'}\n` +
-    `💰 Sotish narxi (so'm): ${defaultSotish ? formatNumber(defaultSotish) + ' so\'m' : 'Belgilanmagan (birinchi kirimda so\'raladi)'}\n` +
+    `💰 Ustama (tan narxiga qo'shiladi, so'm): ${defaultSotish ? formatNumber(defaultSotish) + ' so\'m' : 'Belgilanmagan (birinchi kirimda so\'raladi)'}\n` +
     `🕐 Ish vaqti: ${workingHours || '-'}\n`;
 
   const kb = new InlineKeyboard()
     .text("🔑 Ma'lumot o'chirish/tahrirlash", "settings_editdel").row()
     .text("💵 Dollar kursi", "settings_dollar").text("🏪 Do'kon sozlamalari", "settings_shop").row()
-    .text("💰 Sotish narxi (so'm)", "settings_sotish_narx").row()
+    .text("💰 Ustama (so'm)", "settings_sotish_narx").row()
     .text("📊 Hisobotlarni boshqarish", "settings_reports").row()
     .text("🔙 Orqaga", "settings_back");
   await ctx.reply(infoText, { reply_markup: kb, parse_mode: "HTML" });
@@ -3661,10 +3673,10 @@ bot.callbackQuery("settings_sotish_narx", async (ctx) => {
   const current = await getSetting("default_sotish_narx_som", shopId);
   ctx.session.step = "settings_sotish_narx";
   await ctx.reply(
-    `💰 <b>Sotish narxi (so'm) o'zgartirish</b>\n\n` +
-    `Keyingi kirimlarda ishlatiladigan default sotish narxi. So'mda saqlanadi — dollar kursi o'zgasa ham bu summa o'zgarmaydi.\n\n` +
-    `Joriy: ${current ? formatNumber(current) + ' so\'m' : 'Belgilanmagan'}\n\n` +
-    `Yangi sotish narxini kiriting (so'm, 1 dona):`,
+    `💰 <b>Ustama (so'm) o'zgartirish</b>\n\n` +
+    `Keyingi kirimlarda: <b>sotish narxi = tan narx + ustama</b>. So'mda saqlanadi.\n\n` +
+    `Joriy ustama: ${current ? formatNumber(current) + ' so\'m' : 'Belgilanmagan'}\n\n` +
+    `Yangi ustamani kiriting (so'm):`,
     { reply_markup: backBtn, parse_mode: "HTML" }
   );
 });
@@ -3685,12 +3697,12 @@ async function showSettingsMenu(ctx) {
     `📞 Telefon: ${phone || '-'}\n` +
     `📍 Manzil: ${address || '-'}\n` +
     `💵 Dollar kursi: ${dollarKurs ? formatNumber(dollarKurs) + ' so\'m' : '-'}\n` +
-    `💰 Sotish narxi (so'm): ${defaultSotish ? formatNumber(defaultSotish) + ' so\'m' : 'Belgilanmagan'}\n` +
+    `💰 Ustama (so'm): ${defaultSotish ? formatNumber(defaultSotish) + ' so\'m' : 'Belgilanmagan'}\n` +
     `🕐 Ish vaqti: ${workingHours || '-'}\n`;
   const kb = new InlineKeyboard()
     .text("🔑 Ma'lumot o'chirish/tahrirlash", "settings_editdel").row()
     .text("💵 Dollar kursi", "settings_dollar").text("🏪 Do'kon sozlamalari", "settings_shop").row()
-    .text("💰 Sotish narxi (so'm)", "settings_sotish_narx").row()
+    .text("💰 Ustama (so'm)", "settings_sotish_narx").row()
     .text("📊 Hisobotlarni boshqarish", "settings_reports").row()
     .text("🔙 Orqaga", "settings_back");
   return ctx.editMessageText(infoText, { reply_markup: kb, parse_mode: "HTML" }).catch(() =>
