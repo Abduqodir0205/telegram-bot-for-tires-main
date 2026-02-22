@@ -1032,3 +1032,122 @@ The table `public.admins` does not exist in the current database.
 2026-01-26 18:09:57 [DEBUG]: Duration: 0ms
 2026-01-26 18:09:57 [DEBUG]: Query: SELECT "public"."users"."id", "public"."users"."telegram_id", "public"."users"."first_name", "public"."users"."last_name", "public"."users"."username", "public"."users"."role"::text, "public"."users"."shop_id", "public"."users"."created_at", "public"."users"."updated_at" FROM "public"."users" WHERE ("public"."users"."telegram_id" = $1 AND 1=1) LIMIT $2 OFFSET $3
 2026-01-26 18:09:57 [DEBUG]: Duration: 0ms
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "rabochiy_sotuv" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "shop_settings" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "dollar_history" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.size.upsert()` invocation:
+
+
+The table `public.sizes` does not exist in the current database.
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "rabochiy_sotuv" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "shop_settings" does not exist`
+2026-02-22 14:17:03 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "dollar_history" does not exist`
+2026-02-22 14:36:43 [ERROR]: Prisma Error: 
+Invalid `prisma.kirim.count()` invocation:
+
+{
+  select: {
+    _count: {
+      select: {
+        _all: true
+      }
+    }
+  },
+  where: {
+    OR: [
+      {
+        shopId: null
+      },
+      {
+        shopId: 1
+      }
+    ]
+  }
+}
+
+Argument `shopId` is missing.

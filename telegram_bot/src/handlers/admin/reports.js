@@ -41,8 +41,8 @@ reports.hears('📅 Kunlik hisobot', async (ctx) => {
       message += `\n\n📜 *Sotuvlar:*\n`;
       for (const sale of sales.slice(0, 5)) {
         const typeIcon = sale.itemType === 'NEW' ? '🛞' : '♻️';
-        const tireInfo = sale.tire 
-          ? `${sale.tire.brand} ${sale.tire.size}`
+        const tireInfo = sale.kirim 
+          ? `${sale.kirim.brand} ${sale.kirim.size}`
           : `${sale.usedTire?.size || 'N/A'}`;
         message += `${typeIcon} ${tireInfo} - ${sale.quantity} dona - ${formatCurrency(sale.totalPrice)}\n`;
       }

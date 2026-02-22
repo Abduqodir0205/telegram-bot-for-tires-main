@@ -1,11 +1,13 @@
 const { prisma } = require('../utils/database');
 const logger = require('../utils/logger');
 
+const DEFAULT_SHOP_ID = 1;
+
 class TireService {
   // New Tires
   async createTire(data) {
     try {
-      const tire = await prisma.tire.create({
+      const tire = await prisma.kirim.create({
         data: {
           shopId: data.shopId,
           brand: data.brand,
@@ -37,22 +39,22 @@ class TireService {
   }
 
   async getTireById(id) {
-    return prisma.tire.findUnique({
+    return prisma.kirim.findUnique({
       where: { id },
     });
   }
 
   async getAllTires(shopId, page = 1, limit = 10) {
     const skip = (page - 1) * limit;
-    
+    const sid = shopId ?? DEFAULT_SHOP_ID;
     const [tires, total] = await Promise.all([
-      prisma.tire.findMany({
-        where: { shopId },
+      prisma.kirim.findMany({
+        where: { shopId: sid },
         orderBy: [{ brand: 'asc' }, { size: 'asc' }],
         skip,
         take: limit,
       }),
-      prisma.tire.count({ where: { shopId } }),
+      prisma.kirim.count({ where: { shopId: sid } }),
     ]);
 
     return {
@@ -64,9 +66,10 @@ class TireService {
   }
 
   async getAvailableTires(shopId) {
-    return prisma.tire.findMany({
+    const sid = shopId ?? DEFAULT_SHOP_ID;
+    return prisma.kirim.findMany({
       where: {
-        shopId,
+        shopId: sid,
         quantity: { gt: 0 },
       },
       orderBy: [{ brand: 'asc' }, { size: 'asc' }],
@@ -76,7 +79,7 @@ class TireService {
   async updateTire(id, data) {
     const oldTire = await this.getTireById(id);
     
-    const tire = await prisma.tire.update({
+    const tire = await prisma.kirim.update({
       where: { id },
       data,
     });
@@ -101,7 +104,7 @@ class TireService {
   }
 
   async addStock(id, quantity, price) {
-    const tire = await prisma.tire.update({
+    const tire = await prisma.kirim.update({
       where: { id },
       data: {
         quantity: { increment: quantity },
@@ -123,13 +126,13 @@ class TireService {
   }
 
   async deleteTire(id) {
-    return prisma.tire.delete({
+    return prisma.kirim.delete({
       where: { id },
     });
   }
 
   async searchTires(shopId, query) {
-    return prisma.tire.findMany({
+    return prisma.kirim.findMany({
       where: {
         shopId,
         OR: [
@@ -141,7 +144,7 @@ class TireService {
   }
 
   async getOutOfStockTires(shopId) {
-    return prisma.tire.findMany({
+    return prisma.kirim.findMany({
       where: {
         shopId,
         quantity: 0,
@@ -150,7 +153,7 @@ class TireService {
   }
 
   async getLowStockTires(shopId, threshold = 3) {
-    return prisma.tire.findMany({
+    return prisma.kirim.findMany({
       where: {
         shopId,
         quantity: { lte: threshold, gt: 0 },

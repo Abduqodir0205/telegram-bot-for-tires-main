@@ -7,7 +7,7 @@ class SalesService {
     try {
       const sale = await prisma.$transaction(async (tx) => {
         // Create sale record
-        const newSale = await tx.sale.create({
+        const newSale = await tx.chiqim.create({
           data: {
             itemType: data.itemType,
             tireId: data.tireId,
@@ -18,14 +18,14 @@ class SalesService {
             shopId: data.shopId,
           },
           include: {
-            tire: true,
+            kirim: true,
             usedTire: true,
           },
         });
 
         // Update stock
         if (data.itemType === 'NEW' && data.tireId) {
-          await tx.tire.update({
+          await tx.kirim.update({
             where: { id: data.tireId },
             data: { quantity: { decrement: data.quantity } },
           });
@@ -59,10 +59,10 @@ class SalesService {
   }
 
   async getSaleById(id) {
-    return prisma.sale.findUnique({
+    return prisma.chiqim.findUnique({
       where: { id },
       include: {
-        tire: true,
+        kirim: true,
         usedTire: true,
         admin: true,
       },
@@ -86,17 +86,17 @@ class SalesService {
     }
 
     const [sales, total] = await Promise.all([
-      prisma.sale.findMany({
+      prisma.chiqim.findMany({
         where,
         include: {
-          tire: true,
+          kirim: true,
           usedTire: true,
         },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      prisma.sale.count({ where }),
+      prisma.chiqim.count({ where }),
     ]);
 
     return {
@@ -111,7 +111,7 @@ class SalesService {
     const startOfDay = getStartOfDay(date);
     const endOfDay = getEndOfDay(date);
 
-    const sales = await prisma.sale.findMany({
+    const sales = await prisma.chiqim.findMany({
       where: {
         shopId,
         createdAt: {
@@ -120,7 +120,7 @@ class SalesService {
         },
       },
       include: {
-        tire: true,
+        kirim: true,
         usedTire: true,
       },
     });
@@ -151,7 +151,7 @@ class SalesService {
     const startOfMonth = getStartOfMonth(date);
     const endOfMonth = getEndOfMonth(date);
 
-    const sales = await prisma.sale.groupBy({
+    const sales = await prisma.chiqim.groupBy({
       by: ['itemType'],
       where: {
         shopId,
@@ -193,7 +193,7 @@ class SalesService {
     };
 
     // Income from sales
-    const salesIncome = await prisma.sale.aggregate({
+    const salesIncome = await prisma.chiqim.aggregate({
       where: { ...where, shopId },
       _sum: { totalPrice: true },
     });

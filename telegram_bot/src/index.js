@@ -2,346 +2,27 @@ require("dotenv").config();
 
 const https = require("https");
 const { Bot, session, InlineKeyboard, Keyboard, InputFile } = require("grammy");
-const { Pool } = require("pg");
+const { prisma } = require("./utils/database");
+const shopService = require("./services/shopService");
+const inventoryService = require("./services/inventoryService");
+const saleService = require("./services/saleService");
 const { extractTableFromImage } = require("./gemini-ocr.js");
 const { extractTableFromImageTesseract } = require("./tesseract-ocr.js");
 const ExcelJS = require("exceljs");
 const cron = require("node-cron");
-const express = require('express');
-const app = express();
-// Render.com dinamik PORT talab qiladi; mahalliy ishga tushirishda 3000 ishlatiladi
-const PORT = process.env.PORT || 3000;
-
 // ==================== DATABASE SETUP ====================
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes("localhost")
-    ? false
-    : { rejectUnauthorized: false },
-});
+const { runInit } = require("./utils/initDb");
+const legacyData = require("./services/legacyDataService");
 
-// Initialize database tables
-async function initDB() {
-  const client = await pool.connect();
-  try {
-    await client.query(`
-      -- Razmerlar
-      CREATE TABLE IF NOT EXISTS sizes (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(50) UNIQUE NOT NULL
-      );
-
-      -- Brendlar
-      CREATE TABLE IF NOT EXISTS brands (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100) UNIQUE NOT NULL
-      );
-
-      -- Kirim: kelgan narxi va sotish narxi bilan
-      CREATE TABLE IF NOT EXISTS kirim (
-        id SERIAL PRIMARY KEY,
-        razmer VARCHAR(50) NOT NULL,
-        balon_turi VARCHAR(100) NOT NULL,
-        soni INTEGER NOT NULL,
-        kelgan_narx INTEGER NOT NULL,
-        sotish_narx INTEGER NOT NULL,
-        umumiy_qiymat INTEGER NOT NULL,
-        sana DATE DEFAULT CURRENT_DATE,
-        dollar_kurs DECIMAL(10,2) DEFAULT 0,
-        narx_dona INTEGER DEFAULT 0
-      );
-
-      -- Chiqim/Sotuvlar
-      CREATE TABLE IF NOT EXISTS chiqim (
-        id SERIAL PRIMARY KEY,
-        razmer VARCHAR(50) NOT NULL,
-        balon_turi VARCHAR(100) NOT NULL,
-        sotildi INTEGER NOT NULL,
-        umumiy_qiymat INTEGER NOT NULL,
-        foyda INTEGER DEFAULT 0,
-        sana DATE DEFAULT CURRENT_DATE,
-        rabochiy_olindi INTEGER DEFAULT 0,
-        rabochiy_narxi INTEGER DEFAULT 0
-      );
-
-      -- Rabochiy balonlar
-      CREATE TABLE IF NOT EXISTS rabochiy_balon (
-        id SERIAL PRIMARY KEY,
-        razmer VARCHAR(50) NOT NULL,
-        balon_turi VARCHAR(100) NOT NULL,
-        soni INTEGER NOT NULL,
-        narx INTEGER DEFAULT 0,
-        holat VARCHAR(20) DEFAULT 'yaxshi',
-        sana DATE DEFAULT CURRENT_DATE
-      );
-
-      -- Olinishi kerak
-      CREATE TABLE IF NOT EXISTS olinish_kerak (
-        id SERIAL PRIMARY KEY,
-        razmer VARCHAR(50) NOT NULL,
-        balon_turi VARCHAR(100) NOT NULL,
-        soni INTEGER NOT NULL
-      );
-
-      -- Sozlamalar
-      CREATE TABLE IF NOT EXISTS settings (
-        key VARCHAR(50) PRIMARY KEY,
-        value TEXT
-      );
-    `);
-
-    // Default razmerlar
-    const sizes = [
-      "175/70 R12", "165/70 R13", "175/70 R13", "185/70 R13",
-      "185/65 R14", "185/70 R14", "205/70 R14",
-      "195/60 R15", "195/65 R15", "205/65 R15",
-      "205/60 R16", "215/60 R16"
-    ];
-
-    const brands = [
-      "Imperati", "Cotechoo, Cho1", "Cotechoo, Cho2", "Zitto Ravon",
-      "Sunfull", "Vagner", "Hifly All-turi", "Joyroad",
-      "Risen Durable", "Colo Grelander", "Largo, Smartline", "Largo, Arduzza"
-    ];
-
-    for (const size of sizes) {
-      await client.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [size]);
-    }
-
-    for (const brand of brands) {
-      await client.query("INSERT INTO brands (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [brand]);
-    }
-
-    // Default sozlamalar
-    await client.query(`
-      INSERT INTO settings (key, value) VALUES 
-        ('shop_name', 'SherShina'),
-        ('phone', '+998 90 123 45 67'),
-        ('address', 'Toshkent shahri'),
-        ('dollar_kurs', '12800'),
-        ('latitude', '41.311081'),
-        ('longitude', '69.240562'),
-        ('working_hours', '09:00 - 20:00'),
-        ('report_daily_time', '21:00'),
-        ('report_weekly_day', '5')
-      ON CONFLICT (key) DO NOTHING
-    `);
-
-    console.log("Database initialized");
-  } finally {
-    client.release();
-  }
-}
-
-// Dollar kursi tarixini saqlash uchun jadval
-async function ensureDollarHistoryTable() {
-  await pool.query(`CREATE TABLE IF NOT EXISTS dollar_history (
-    id SERIAL PRIMARY KEY,
-    kurs INTEGER NOT NULL,
-    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  )`);
-}
-
-// Chiqim jadvaliga naqd_foyda, zaxira_foyda qo'shish (migration)
-async function ensureChiqimFoydaColumns() {
-  for (const col of ["naqd_foyda", "zaxira_foyda"]) {
-    try {
-      await pool.query(`ALTER TABLE chiqim ADD COLUMN ${col} INTEGER DEFAULT 0`);
-    } catch (e) {
-      if (!e.message?.includes("already exists")) console.warn("Chiqim migration:", e.message);
-    }
-  }
-}
-
-// Rabochiy balon sotilganda yoziladigan jadval (korrektirovka)
-async function ensureRabochiySotuvTable() {
-  await pool.query(`CREATE TABLE IF NOT EXISTS rabochiy_sotuv (
-    id SERIAL PRIMARY KEY,
-    rabochiy_balon_id INTEGER,
-    razmer VARCHAR(50) NOT NULL,
-    balon_turi VARCHAR(100) NOT NULL,
-    olingan_narx INTEGER NOT NULL,
-    sotilgan_narx INTEGER NOT NULL,
-    sana DATE DEFAULT CURRENT_DATE
-  )`);
-}
-
-// ==================== KO'P DO'KON: shops, shop_admins, shop_id migratsiya ====================
-const BOSS_ADMIN_TELEGRAM_ID = 222592599;
-
-async function ensureShopsAndAdmins() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS shops (
-      id SERIAL PRIMARY KEY,
-      name VARCHAR(100) NOT NULL,
-      phone TEXT,
-      address TEXT,
-      dollar_kurs VARCHAR(20),
-      report_daily_time VARCHAR(10) DEFAULT '21:00',
-      report_weekly_day VARCHAR(2) DEFAULT '5',
-      latitude VARCHAR(20),
-      longitude VARCHAR(20),
-      working_hours VARCHAR(50),
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  // Render/Prisma bilan yaratilgan shops jadvalida ustunlar bo‘lmasa qo‘shish (migratsiya)
-  const shopColumns = [
-    ["address", "TEXT"],
-    ["dollar_kurs", "VARCHAR(20)"],
-    ["report_daily_time", "VARCHAR(10) DEFAULT '21:00'"],
-    ["report_weekly_day", "VARCHAR(2) DEFAULT '5'"],
-    ["latitude", "VARCHAR(20)"],
-    ["longitude", "VARCHAR(20)"],
-    ["working_hours", "VARCHAR(50)"],
-    ["created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"],
-  ];
-  for (const [col, type] of shopColumns) {
-    try {
-      await pool.query(`ALTER TABLE shops ADD COLUMN IF NOT EXISTS ${col} ${type}`);
-    } catch (e) {
-      if (!e.message?.includes("already exists")) console.warn("shops column migration:", col, e.message);
-    }
-  }
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS shop_admins (
-      telegram_id BIGINT NOT NULL,
-      shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-      PRIMARY KEY (telegram_id, shop_id)
-    )
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS shop_settings (
-      shop_id INTEGER NOT NULL REFERENCES shops(id) ON DELETE CASCADE,
-      key VARCHAR(50) NOT NULL,
-      value TEXT,
-      PRIMARY KEY (shop_id, key)
-    )
-  `);
-  for (const tbl of ["kirim", "chiqim", "rabochiy_balon", "olinish_kerak"]) {
-    try {
-      await pool.query(`ALTER TABLE ${tbl} ADD COLUMN IF NOT EXISTS shop_id INTEGER DEFAULT 1`);
-    } catch (e) {
-      if (!e.message?.includes("already exists")) console.warn("shop_id migration:", e.message);
-    }
-  }
-  try {
-    await pool.query(`ALTER TABLE rabochiy_sotuv ADD COLUMN IF NOT EXISTS shop_id INTEGER DEFAULT 1`);
-  } catch (e) {
-    if (!e.message?.includes("already exists")) console.warn("rabochiy_sotuv shop_id:", e.message);
-  }
-  try {
-    await pool.query(`ALTER TABLE dollar_history ADD COLUMN IF NOT EXISTS shop_id INTEGER DEFAULT 1`);
-  } catch (e) {
-    if (!e.message?.includes("already exists")) console.warn("dollar_history shop_id:", e.message);
-  }
-  const hasShop1 = await pool.query("SELECT id FROM shops WHERE id = 1");
-  if (hasShop1.rows.length === 0) {
-    await pool.query(`
-      INSERT INTO shops (id, name, phone, address, dollar_kurs, report_daily_time, report_weekly_day, latitude, longitude, working_hours, created_at, updated_at)
-      VALUES (1, 'SherShina', '+998 90 123 45 67', 'Toshkent shahri', '12800', '21:00', '5', '41.311081', '69.240562', '09:00 - 20:00', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `);
-    const defaults = [
-      ["shop_name", "SherShina"], ["phone", "+998 90 123 45 67"], ["address", "Toshkent shahri"],
-      ["dollar_kurs", "12800"], ["latitude", "41.311081"], ["longitude", "69.240562"],
-      ["working_hours", "09:00 - 20:00"], ["report_daily_time", "21:00"], ["report_weekly_day", "5"]
-    ];
-    for (const [k, v] of defaults) {
-      await pool.query(
-        "INSERT INTO shop_settings (shop_id, key, value) VALUES (1, $1, $2) ON CONFLICT (shop_id, key) DO UPDATE SET value = $2",
-        [k, v]
-      );
-    }
-    const envAdmins = (process.env.ADMIN_IDS || "").split(",").map(id => parseInt(id.trim())).filter(Boolean);
-    for (const tid of envAdmins) {
-      try {
-        await pool.query(
-          "INSERT INTO shop_admins (telegram_id, shop_id) VALUES ($1, $2) ON CONFLICT (telegram_id, shop_id) DO NOTHING",
-          [tid, 1]
-        );
-      } catch (e) { /* ignore */ }
-    }
-    await pool.query(
-      "INSERT INTO shop_admins (telegram_id, shop_id) VALUES ($1, $2) ON CONFLICT (telegram_id, shop_id) DO NOTHING",
-      [BOSS_ADMIN_TELEGRAM_ID, 1]
-    );
-    await pool.query("SELECT setval(pg_get_serial_sequence('shops', 'id'), (SELECT COALESCE(MAX(id), 1) FROM shops))").catch(() => {});
-  } else {
-    await pool.query("SELECT setval(pg_get_serial_sequence('shops', 'id'), (SELECT COALESCE(MAX(id), 1) FROM shops))").catch(() => {});
-  }
-}
-
-// Indekslar — so'rovlar tezroq ishlashi uchun
-async function ensureIndexes() {
-  const indexes = [
-    "CREATE INDEX IF NOT EXISTS idx_kirim_shop_razmer_brend ON kirim (shop_id, razmer, balon_turi)",
-    "CREATE INDEX IF NOT EXISTS idx_kirim_shop_id ON kirim (shop_id)",
-    "CREATE INDEX IF NOT EXISTS idx_chiqim_shop_razmer_brend ON chiqim (shop_id, razmer, balon_turi)",
-    "CREATE INDEX IF NOT EXISTS idx_chiqim_shop_id ON chiqim (shop_id)",
-    "CREATE INDEX IF NOT EXISTS idx_chiqim_sana ON chiqim (sana)",
-    "CREATE INDEX IF NOT EXISTS idx_kirim_sana ON kirim (sana)",
-    "CREATE INDEX IF NOT EXISTS idx_rabochiy_balon_shop ON rabochiy_balon (shop_id)",
-    "CREATE INDEX IF NOT EXISTS idx_rabochiy_sotuv_shop_sana ON rabochiy_sotuv (shop_id, sana)",
-    "CREATE INDEX IF NOT EXISTS idx_shop_settings_shop_key ON shop_settings (shop_id, key)",
-    "CREATE INDEX IF NOT EXISTS idx_dollar_history_shop ON dollar_history (shop_id, changed_at DESC)"
-  ];
-  for (const sql of indexes) {
-    try {
-      await pool.query(sql);
-    } catch (e) {
-      if (!e.message?.includes("already exists")) console.warn("Index:", e.message);
-    }
-  }
-}
-
-// Dollar kursini o'zgartirganda tarixga yozish (shop bo'yicha)
-async function setDollarKurs(newKurs, shopId = 1) {
-  await setSetting("dollar_kurs", newKurs.toString(), shopId);
-  await pool.query("INSERT INTO dollar_history (kurs, shop_id) VALUES ($1, $2)", [newKurs, shopId]);
-}
-
-// Kirim va chiqimda kursni olish uchun
-async function getKursByDate(date, shopId = 1) {
-  const res = await pool.query(
-    `SELECT kurs FROM dollar_history WHERE shop_id = $1 AND changed_at <= $2 ORDER BY changed_at DESC LIMIT 1`,
-    [shopId, date]
-  );
-  return Number(res.rows[0]?.kurs || await getSetting("dollar_kurs", shopId));
-}
-
-// ==================== HELPER FUNCTIONS ====================
-async function getSetting(key, shopId = 1) {
-  const result = await pool.query("SELECT value FROM shop_settings WHERE shop_id = $1 AND key = $2", [shopId, key]);
-  if (result.rows[0]?.value != null) return result.rows[0].value;
-  const fallback = await pool.query("SELECT value FROM settings WHERE key = $1", [key]);
-  return fallback.rows[0]?.value || null;
-}
-
-async function setSetting(key, value, shopId = 1) {
-  await pool.query(
-    "INSERT INTO shop_settings (shop_id, key, value) VALUES ($1, $2, $3) ON CONFLICT (shop_id, key) DO UPDATE SET value = $3",
-    [shopId, key, value]
-  );
-}
-
-function isBoss(telegramId) {
-  return Number(telegramId) === BOSS_ADMIN_TELEGRAM_ID;
-}
-
-async function getAdminShopIds(telegramId) {
-  if (isBoss(telegramId)) {
-    const r = await pool.query("SELECT id FROM shops ORDER BY id");
-    return r.rows.map((x) => x.id);
-  }
-  const r = await pool.query("SELECT shop_id FROM shop_admins WHERE telegram_id = $1 ORDER BY shop_id", [telegramId]);
-  return r.rows.map((x) => x.shop_id);
-}
-
-async function isAdmin(telegramId) {
-  if (isBoss(telegramId)) return true;
-  const r = await pool.query("SELECT 1 FROM shop_admins WHERE telegram_id = $1 LIMIT 1", [telegramId]);
-  return r.rows.length > 0;
-}
+// ==================== HELPER FUNCTIONS (servislar orqali) ====================
+const getSetting = shopService.getSetting;
+const setSetting = shopService.setSetting;
+const isBoss = shopService.isBoss;
+const getAdminShopIds = shopService.getAdminShopIds;
+const isAdmin = shopService.isAdmin;
+const setDollarKurs = shopService.setDollarKurs;
+const getKursByDate = shopService.getKursByDate;
+const BOSS_ADMIN_TELEGRAM_ID = shopService.BOSS_ADMIN_TELEGRAM_ID;
 
 function getCurrentShopId(ctx) {
   return ctx.session?.shopId != null ? ctx.session.shopId : 1;
@@ -356,9 +37,9 @@ async function getUserShopId(ctx) {
 
 /** User uchun do'kon tanlash ekrani (barcha do'konlar + Yaqin do'konlar) */
 async function showShopSelection(ctx, text = "Do'kon tanlang:") {
-  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  const shops = await shopService.getShops();
   const kb = new InlineKeyboard();
-  for (const row of shops.rows) {
+  for (const row of shops) {
     kb.text(`🏪 ${row.name}`, `user_select_shop_${row.id}`).row();
   }
   kb.text("📍 Yaqin do'konlar", "user_nearby_shop_select").row();
@@ -390,57 +71,8 @@ function isValidLatLon(lat, lon) {
   return !isNaN(la) && la >= -90 && la <= 90 && !isNaN(lo) && lo >= -180 && lo <= 180;
 }
 
-/** Barcha do'konlar ro'yxati (id, name, address, phone, lat, lon, working_hours, shop_name) */
-async function getAllShopsWithSettings() {
-  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
-  const list = [];
-  for (const row of shops.rows) {
-    const shopId = row.id;
-    const address = await getSetting("address", shopId);
-    const phone = await getSetting("phone", shopId);
-    const latStr = await getSetting("latitude", shopId);
-    const lonStr = await getSetting("longitude", shopId);
-    const workingHours = await getSetting("working_hours", shopId);
-    const shopName = await getSetting("shop_name", shopId) || row.name;
-    const lat = latStr ? parseFloat(latStr) : NaN;
-    const lon = lonStr ? parseFloat(lonStr) : NaN;
-    // Faqat to'g'ri diapazondagi koordinatalar (lat, lon almashtirilmasligi uchun)
-    const latitude = isValidLatLon(lat, lon) ? lat : null;
-    const longitude = isValidLatLon(lat, lon) ? lon : null;
-    list.push({
-      id: shopId,
-      name: row.name,
-      shopName: shopName || row.name,
-      address: address || "-",
-      phone: phone || "-",
-      workingHours: workingHours || "-",
-      latitude,
-      longitude,
-    });
-  }
-  return list;
-}
-
-/** User lokatsiyasiga qarab do'konlarni yaqinlik bo'yicha saralash (haversine: userLat, userLon, shopLat, shopLon) */
-async function getShopsSortedByDistance(userLat, userLon) {
-  if (!isValidLatLon(userLat, userLon)) return getAllShopsWithSettings();
-  const list = await getAllShopsWithSettings();
-  const withLocation = [];
-  const withoutLocation = [];
-  for (const s of list) {
-    if (s.latitude != null && s.longitude != null) {
-      const km = haversineKm(userLat, userLon, s.latitude, s.longitude);
-      withLocation.push({ ...s, distanceKm: km });
-    } else {
-      withoutLocation.push({ ...s, distanceKm: null });
-    }
-  }
-  withLocation.sort((a, b) => {
-    const d = a.distanceKm - b.distanceKm;
-    return d !== 0 ? d : (a.shopName || "").localeCompare(b.shopName || "");
-  });
-  return [...withLocation, ...withoutLocation];
-}
+const getAllShopsWithSettings = shopService.getAllShopsWithSettings;
+const getShopsSortedByDistance = shopService.getShopsSortedByDistance;
 
 /** Foydalanuvchi turi bo'yicha bosh menyu (user / admin / boss). User do'kon tanlamaguncha faqat "Do'kon tanlang". */
 async function getMainMenu(ctx) {
@@ -449,139 +81,32 @@ async function getMainMenu(ctx) {
 }
 
 async function getAllSizes() {
-  const result = await pool.query("SELECT name FROM sizes ORDER BY id");
-  return result.rows.map(r => r.name);
+  const result = await legacyData.getSizes();
+  return result.map(r => r.name);
 }
 
 async function getAllBrands() {
-  const result = await pool.query("SELECT name FROM brands ORDER BY id");
-  return result.rows.map(r => r.name);
+  const result = await legacyData.getBrands();
+  return result.map(r => r.name);
 }
 
-async function getStock(razmer, balon_turi, shopId = 1) {
-  const r = await pool.query(
-    `SELECT (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)) -
-            (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)) AS qoldiq`,
-    [razmer, balon_turi, shopId]
-  );
-  return Number(r.rows[0]?.qoldiq ?? 0);
-}
+const getStock = legacyData.getStock;
 
-// User va admin uchun sotish narxi (kirim jadvalidagi sotish_narx = tan_narx + ustama)
 async function getSotishNarx(razmer, balon_turi, shopId = 1) {
-  const result = await pool.query(
-    "SELECT sotish_narx, dollar_kurs FROM kirim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3) ORDER BY id DESC LIMIT 1",
-    [razmer, balon_turi, shopId]
-  );
-  const row = result.rows[0];
+  const row = await legacyData.getSotishNarx(razmer, balon_turi, shopId);
   if (!row) return 0;
   const kurs = parseInt(await getSetting("dollar_kurs", shopId), 10) || 1;
-  return row.dollar_kurs === 1 ? Math.round(Number(row.sotish_narx) * kurs) : Number(row.sotish_narx);
+  return row.dollarKurs === 1 ? Math.round(Number(row.sotishNarx) * kurs) : Number(row.sotishNarx);
 }
 
 // O'rtacha tannarx (kelgan_narx) — sklad qiymati va foyda hisoblashning markaziy funksiyasi (so'mda)
-async function getKelganNarx(razmer, balon_turi, shopId = 1) {
-  const result = await pool.query(
-    "SELECT kelgan_narx, dollar_kurs FROM kirim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)",
-    [razmer, balon_turi, shopId]
-  );
-  if (!result.rows.length) return 0;
-  const kurs = parseInt(await getSetting("dollar_kurs", shopId), 10) || 1;
-  let sum = 0;
-  let count = 0;
-  for (const r of result.rows) {
-    const val = r.dollar_kurs === 1 ? Number(r.kelgan_narx) * kurs : Number(r.kelgan_narx);
-    sum += val;
-    count++;
-  }
-  return count ? Math.round(sum / count) : 0;
-}
-
-// Skladda bor razmerlar (qoldiq > 0)
-async function getSizesWithStock(shopId = 1) {
-  const result = await pool.query(`
-    SELECT DISTINCT k.razmer FROM kirim k
-    WHERE (k.shop_id IS NULL OR k.shop_id = $1) AND
-    (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $1)) -
-    (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $1)) > 0
-    ORDER BY k.razmer
-  `, [shopId]);
-  return result.rows.map(r => r.razmer);
-}
-
-// Berilgan razmer uchun skladda bor brendlar
-async function getBrandsWithStock(razmer, shopId = 1) {
-  const result = await pool.query(`
-    SELECT DISTINCT k.balon_turi FROM kirim k
-    WHERE k.razmer = $1 AND (k.shop_id IS NULL OR k.shop_id = $2) AND
-      (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $2)) -
-      (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer AND balon_turi = k.balon_turi AND (shop_id IS NULL OR shop_id = $2)) > 0
-    ORDER BY k.balon_turi
-  `, [razmer, shopId]);
-  return result.rows.map(r => r.balon_turi);
-}
-
-// Sklad tannarx (investitsiya) va kutilayotgan sof foyda — bitta SQL (N+1 yo'q)
-async function getSkladValuationByTannarx(shopId = 1) {
-  const r = await pool.query(`
-    WITH agg AS (
-      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi, ROUND(AVG(k.kelgan_narx))::int AS tan_narx
-      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
-    ),
-    outgo AS (
-      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
-      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
-    ),
-    qoldiq AS (
-      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q, a.tan_narx
-      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
-    ),
-    last_sotish AS (
-      SELECT DISTINCT ON (razmer, balon_turi) razmer, balon_turi, sotish_narx
-      FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY razmer, balon_turi, id DESC
-    )
-    SELECT
-      COALESCE(SUM(q.q * q.tan_narx), 0)::bigint AS investitsiya,
-      COALESCE(SUM(q.q * (COALESCE(s.sotish_narx, 0) - q.tan_narx)), 0)::bigint AS kutilayotgan
-    FROM qoldiq q
-    LEFT JOIN last_sotish s ON q.razmer = s.razmer AND q.balon_turi = s.balon_turi
-    WHERE q.q > 0
-  `, [shopId]);
-  return {
-    investitsiya: Number(r.rows[0]?.investitsiya ?? 0),
-    kutilayotganFoyda: Number(r.rows[0]?.kutilayotgan ?? 0)
-  };
-}
-
-// Qoldiq hisoboti uchun barcha pozitsiyalar (bitta so'rov — tsikl emas)
-async function getSkladRowsWithValuation(shopId = 1) {
-  const r = await pool.query(`
-    WITH agg AS (
-      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi, ROUND(AVG(k.kelgan_narx))::int AS tan_narx
-      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
-    ),
-    outgo AS (
-      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
-      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
-    ),
-    qoldiq AS (
-      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q, a.tan_narx
-      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
-    ),
-    last_sotish AS (
-      SELECT DISTINCT ON (razmer, balon_turi) razmer, balon_turi, sotish_narx
-      FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY razmer, balon_turi, id DESC
-    ),
-    with_kirdi AS (SELECT a.razmer, a.balon_turi, a.kirdi FROM agg a)
-    SELECT q.razmer, q.balon_turi, k.kirdi, (k.kirdi - q.q) AS sotildi, q.q AS qoldiq, q.tan_narx, COALESCE(s.sotish_narx, 0) AS sotish_narx
-    FROM qoldiq q
-    JOIN with_kirdi k ON q.razmer = k.razmer AND q.balon_turi = k.balon_turi
-    LEFT JOIN last_sotish s ON q.razmer = s.razmer AND q.balon_turi = s.balon_turi
-    WHERE q.q > 0
-    ORDER BY q.balon_turi, q.razmer
-  `, [shopId]);
-  return r.rows;
-}
+const getKelganNarx = inventoryService.getKelganNarx;
+const getSizesWithStock = inventoryService.getSizesWithStock;
+const getBrandsWithStock = inventoryService.getBrandsWithStock;
+const getSkladValuationByTannarx = inventoryService.getSkladValuationByTannarx;
+const getSkladRowsWithValuation = inventoryService.getSkladRowsWithValuation;
+const syncOlinishKerakFromStock = inventoryService.syncOlinishKerakFromStock;
+const getRabochiyOmborValue = inventoryService.getRabochiyOmborValue;
 
 function formatNumber(num) {
   if (num === null || num === undefined) return '0';
@@ -625,10 +150,17 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
   const sotishSom = yaxlitla(sotishSomXom);
   const umumiySom = soni * sotishSom;
   try {
-    await pool.query(
-      `INSERT INTO kirim (razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, dollar_kurs, narx_dona, shop_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [razmer, balon_turi, soni, kelganSom, sotishSom, umumiySom, narx_type === "dollar" || sotishType === "dollar" ? kurs : 0, kelganSom, shopId]
-    );
+    await legacyData.createKirim({
+      razmer,
+      balon_turi,
+      soni,
+      kelgan_narx: kelganSom,
+      sotish_narx: sotishSom,
+      umumiy_qiymat: umumiySom,
+      dollar_kurs: narx_type === "dollar" || sotishType === "dollar" ? kurs : 0,
+      narx_dona: kelganSom,
+      shop_id: shopId,
+    });
   } catch (e) {
     await ctx.reply("❌ Kirim saqlashda xatolik: " + e.message, { reply_markup: (await isAdmin(ctx.from.id)) && isBoss(ctx.from.id) ? bossMenu : adminMenu });
     ctx.session.step = null;
@@ -910,8 +442,8 @@ bot.command("start", async (ctx) => {
     const shopIds = await getAdminShopIds(userId);
     if (ctx.session.shopId == null && shopIds.length > 0) ctx.session.shopId = shopIds[0];
     if (ctx.session.shopId == null) ctx.session.shopId = 1;
-    const shopRow = await pool.query("SELECT id, name FROM shops WHERE id = $1", [ctx.session.shopId]);
-    const shopName = shopRow.rows[0]?.name || "Do'kon";
+    const shopRow = await shopService.getShopById(ctx.session.shopId);
+    const shopName = shopRow?.name || "Do'kon";
     const menu = isBoss(userId) ? bossMenu : adminMenu;
     await ctx.reply(
       `🎉 Salom, ${name}!\n\n` +
@@ -962,14 +494,8 @@ bot.hears("🔍 Qidiruv", async (ctx) => {
 
 bot.callbackQuery("qidiruv_yangi", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const result = await pool.query(`
-    SELECT DISTINCT k.razmer 
-    FROM kirim k 
-    WHERE (SELECT COALESCE(SUM(soni), 0) FROM kirim WHERE razmer = k.razmer) - 
-          (SELECT COALESCE(SUM(sotildi), 0) FROM chiqim WHERE razmer = k.razmer) > 0
-    ORDER BY k.razmer
-  `);
-  if (result.rows.length === 0) {
+  const razmers = await legacyData.getDistinctRazmerWithStock(null);
+  if (razmers.length === 0) {
     await ctx.reply(
       "😔 Hozircha yangi balonlar yo'q.",
       { reply_markup: await getMainMenu(ctx) }
@@ -977,8 +503,8 @@ bot.callbackQuery("qidiruv_yangi", async (ctx) => {
     return;
   }
   const kb = new InlineKeyboard();
-  for (const r of result.rows) {
-    kb.text(`🛞 ${r.razmer}`, `user_size_${r.razmer}`).row();
+  for (const razmer of razmers) {
+    kb.text(`🛞 ${razmer}`, `user_size_${razmer}`).row();
   }
   await ctx.reply(
     "🛞 <b>Yangi balonlar</b>\n\nRazmerni tanlang:\n\n💡 <i>Har bir razmerda turli brendlar mavjud</i>",
@@ -989,11 +515,8 @@ bot.callbackQuery("qidiruv_yangi", async (ctx) => {
 bot.callbackQuery("qidiruv_eski", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = ctx.from && (await isAdmin(ctx.from.id)) ? getCurrentShopId(ctx) : 1;
-  const result = await pool.query(
-    "SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY razmer",
-    [shopId]
-  );
-  if (result.rows.length === 0) {
+  const rows = await legacyData.getRabochiyBalonList(shopId);
+  if (rows.length === 0) {
     await ctx.reply(
       "🔄 <b>Eski (rabochiy) balonlar</b>\n\n😔 Hozircha yo'q.",
       { reply_markup: await getMainMenu(ctx), parse_mode: "HTML" }
@@ -1003,7 +526,7 @@ bot.callbackQuery("qidiruv_eski", async (ctx) => {
   let text = "🔄 <b>Eski (rabochiy) balonlar</b>\n";
   text += "━━━━━━━━━━━━━━━━━━\n\n";
   text += "💡 <i>Sifatli, arzon narxda!</i>\n\n";
-  for (const r of result.rows) {
+  for (const r of rows) {
     const holat = r.holat === 'yaxshi' ? '✅ Yaxshi' : r.holat === 'orta' ? '🟡 O\'rta' : '🔴 Past';
     text += `🛞 <b>${r.razmer}</b> | ${r.balon_turi}\n`;
     text += `💵 ${formatNumber(r.narx)} so'm\n`;
@@ -1072,18 +595,14 @@ bot.hears("🔄 Rabochiy Balonlar", async (ctx) => {
     return;
   }
 
-  const result = await pool.query(
-    "SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY razmer",
-    [shopId]
-  );
-
-  if (result.rows.length === 0) {
+  const rows = await legacyData.getRabochiyBalonList(shopId);
+  if (rows.length === 0) {
     await ctx.reply("😔 Hozircha yo'q.", { reply_markup: await getMainMenu(ctx), parse_mode: "HTML" });
     return;
   }
 
   let text = "🔄 <b>Rabochiy balonlar</b>\n\n";
-  for (const r of result.rows) {
+  for (const r of rows) {
     const holat = r.holat === 'yaxshi' ? '✅' : r.holat === 'orta' ? '🟡' : '🔴';
     text += `🛞 ${r.razmer} | ${r.balon_turi} — ${formatNumber(r.narx)} so'm ${holat}\n`;
   }
@@ -1228,13 +747,13 @@ bot.callbackQuery("user_go_rab", async (ctx) => {
     await askUserToSelectShop(ctx, "Avval do'kon tanlang.");
     return;
   }
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY razmer", [shopId]);
-  if (result.rows.length === 0) {
+  const rows = await legacyData.getRabochiyBalonList(shopId);
+  if (rows.length === 0) {
     await ctx.reply("😔 Hozircha yo'q.", { reply_markup: userMenu });
     return;
   }
   let text = "🔄 <b>Rabochiy balonlar</b>\n\n";
-  for (const r of result.rows) {
+  for (const r of rows) {
     const holat = r.holat === 'yaxshi' ? '✅' : r.holat === 'orta' ? '🟡' : '🔴';
     text += `🛞 ${r.razmer} | ${r.balon_turi} — ${formatNumber(r.narx)} so'm ${holat}\n`;
   }
@@ -1289,23 +808,23 @@ bot.callbackQuery(/^user_shop_location_(\d+)$/, async (ctx) => {
 bot.callbackQuery(/^user_select_shop_(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = parseInt(ctx.match[1], 10);
-  const row = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
-  if (row.rows.length === 0) return;
+  const row = await shopService.getShopById(shopId);
+  if (!row) return;
   ctx.session.userShopId = shopId;
-  const shopName = await getSetting("shop_name", shopId) || row.rows[0].name;
+  const shopName = await getSetting("shop_name", shopId) || row.name;
   await ctx.reply(`✅ Tanlandi: <b>${shopName}</b>`, { reply_markup: userMenu, parse_mode: "HTML" });
 });
 
 // ==================== BOSS: DO'KON TANLASH VA BOSHQARUV ====================
 bot.hears("📂 Do'kon tanlash", async (ctx) => {
   if (!isBoss(ctx.from.id)) return;
-  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
-  if (shops.rows.length === 0) {
+  const shops = await shopService.getShops();
+  if (shops.length === 0) {
     await ctx.reply("Hali do'konlar yo'q. Avval \"Do'konlar boshqaruvi\" orqali do'kon qo'shing.");
     return;
   }
   const kb = new InlineKeyboard();
-  for (const s of shops.rows) {
+  for (const s of shops) {
     kb.text(s.name, `switch_shop_${s.id}`).row();
   }
   await ctx.reply("📂 Qaysi do'konda ishlashni xohlaysiz?", { reply_markup: kb });
@@ -1314,17 +833,17 @@ bot.hears("📂 Do'kon tanlash", async (ctx) => {
 bot.callbackQuery(/^switch_shop_(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = parseInt(ctx.match[1], 10);
-  const r = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
-  if (r.rows.length === 0) return ctx.reply("Do'kon topilmadi.");
+  const r = await shopService.getShopById(shopId);
+  if (!r) return ctx.reply("Do'kon topilmadi.");
   ctx.session.shopId = shopId;
-  await ctx.reply(`✅ Joriy do'kon: <b>${r.rows[0].name}</b>`, { parse_mode: "HTML", reply_markup: bossMenu });
+  await ctx.reply(`✅ Joriy do'kon: <b>${r.name}</b>`, { parse_mode: "HTML", reply_markup: bossMenu });
 });
 
 bot.hears("🏢 Do'konlar boshqaruvi", async (ctx) => {
   if (!isBoss(ctx.from.id)) return;
-  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  const shops = await shopService.getShops();
   const kb = new InlineKeyboard();
-  for (const s of shops.rows) {
+  for (const s of shops) {
     kb.text(`${s.name}`, `boss_shop_${s.id}`).row();
   }
   kb.text("➕ Yangi do'kon qo'shish", "boss_add_shop").row();
@@ -1338,16 +857,17 @@ bot.hears("🏢 Do'konlar boshqaruvi", async (ctx) => {
 bot.callbackQuery(/^boss_shop_(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = parseInt(ctx.match[1], 10);
-  const shop = await pool.query("SELECT * FROM shops WHERE id = $1", [shopId]);
-  if (shop.rows.length === 0) return;
-  const s = shop.rows[0];
-  const admins = await pool.query("SELECT telegram_id FROM shop_admins WHERE shop_id = $1", [shopId]);
-  const list = admins.rows.length ? admins.rows.map((a) => a.telegram_id).join(", ") : "Yo'q";
+  const s = await shopService.getShopById(shopId);
+  if (!s) return;
+  const admins = await shopService.getShopAdmins(shopId);
+  const list = admins.length ? admins.join(", ") : "Yo'q";
+  const address = await getSetting("address", shopId);
+  const dollarKurs = await getSetting("dollar_kurs", shopId);
   await ctx.reply(
     `🏪 <b>${s.name}</b>\n` +
     `📞 ${s.phone || "-"}\n` +
-    `📍 ${s.address || "-"}\n` +
-    `💵 Kurs: ${s.dollar_kurs || "-"}\n\n` +
+    `📍 ${address || "-"}\n` +
+    `💵 Kurs: ${dollarKurs || "-"}\n\n` +
     `👤 Adminlar (Telegram ID): ${list}`,
     { parse_mode: "HTML" }
   );
@@ -1361,9 +881,9 @@ bot.callbackQuery("boss_add_shop", async (ctx) => {
 
 bot.callbackQuery("boss_manage_admins", async (ctx) => {
   await ctx.answerCallbackQuery();
-  const shops = await pool.query("SELECT id, name FROM shops ORDER BY id");
+  const shops = await shopService.getShops();
   const kb = new InlineKeyboard();
-  for (const s of shops.rows) {
+  for (const s of shops) {
     kb.text(`${s.name} — admin qo'shish`, `boss_add_admin_shop_${s.id}`).row();
     kb.text(`${s.name} — adminlar ro'yxati`, `boss_list_admins_${s.id}`).row();
   }
@@ -1382,20 +902,19 @@ bot.callbackQuery(/^boss_add_admin_shop_(\d+)$/, async (ctx) => {
 bot.callbackQuery(/^boss_list_admins_(\d+)$/, async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = parseInt(ctx.match[1], 10);
-  const shop = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
-  const admins = await pool.query("SELECT telegram_id FROM shop_admins WHERE shop_id = $1", [shopId]);
-  if (admins.rows.length === 0) {
-    await ctx.reply(`"${shop.rows[0]?.name || shopId}" do'konida adminlar yo'q. "Admin qo'shish" orqali qo'shing.`);
+  const shop = await shopService.getShopById(shopId);
+  const admins = await shopService.getShopAdmins(shopId);
+  if (admins.length === 0) {
+    await ctx.reply(`"${shop?.name || shopId}" do'konida adminlar yo'q. "Admin qo'shish" orqali qo'shing.`);
     return;
   }
   const kb = new InlineKeyboard();
-  for (const a of admins.rows) {
-    const tid = a.telegram_id;
+  for (const tid of admins) {
     if (Number(tid) === BOSS_ADMIN_TELEGRAM_ID) continue;
     kb.text(`ID ${tid} olib tashlash`, `boss_remove_admin_${shopId}_${tid}`).row();
   }
   kb.text("🔙 Orqaga", "boss_back");
-  await ctx.reply(`👤 "${shop.rows[0]?.name || shopId}" do'koni adminlari:\n\nOlib tashlash uchun tugmani bosing:`, { reply_markup: kb });
+  await ctx.reply(`👤 "${shop?.name || shopId}" do'koni adminlari:\n\nOlib tashlash uchun tugmani bosing:`, { reply_markup: kb });
 });
 
 bot.callbackQuery(/^boss_remove_admin_(\d+)_(\d+)$/, async (ctx) => {
@@ -1403,7 +922,7 @@ bot.callbackQuery(/^boss_remove_admin_(\d+)_(\d+)$/, async (ctx) => {
   const shopId = parseInt(ctx.match[1], 10);
   const telegramId = parseInt(ctx.match[2], 10);
   if (telegramId === BOSS_ADMIN_TELEGRAM_ID) return ctx.reply("Boss adminni olib tashlash mumkin emas.");
-  await pool.query("DELETE FROM shop_admins WHERE shop_id = $1 AND telegram_id = $2", [shopId, telegramId]);
+  await shopService.removeShopAdmin(shopId, telegramId);
   await ctx.reply(`✅ Admin (ID: ${telegramId}) ushbu do'kondan olib tashlandi.`);
 });
 
@@ -1481,19 +1000,15 @@ bot.callbackQuery(/^kb_(.+)$/, async (ctx) => {
 const KIRIM_CHIQIM_PAGE_SIZE = 20;
 
 async function buildKirimListPage(shopId, page) {
-  const totalRes = await pool.query("SELECT COUNT(*) as c FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-  const total = parseInt(totalRes.rows[0].c, 10);
+  const total = await legacyData.getKirimCount(shopId);
   if (total === 0) return { text: null, total, totalPages: 0, rows: [] };
   const totalPages = Math.ceil(total / KIRIM_CHIQIM_PAGE_SIZE);
   const offset = page * KIRIM_CHIQIM_PAGE_SIZE;
-  const result = await pool.query(
-    "SELECT * FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-    [shopId, KIRIM_CHIQIM_PAGE_SIZE, offset]
-  );
+  const rows = await legacyData.getKirimPaginated(shopId, KIRIM_CHIQIM_PAGE_SIZE, offset);
   const kurs = parseInt(await getSetting("dollar_kurs", shopId)) || 1;
   let text = `<b>Kirimlar</b> (${offset + 1}-${Math.min(offset + KIRIM_CHIQIM_PAGE_SIZE, total)} / ${total})\n`;
   text += "━━━━━━━━━━━━━━━━━━\n";
-  for (const r of result.rows) {
+  for (const r of rows) {
     const inDollar = r.dollar_kurs === 1;
     const tanD = inDollar ? String(r.kelgan_narx) : (kurs ? (r.kelgan_narx / kurs).toFixed(1) : "-");
     const sotishD = inDollar ? String(r.sotish_narx) : (kurs ? (r.sotish_narx / kurs).toFixed(1) : "-");
@@ -1504,7 +1019,7 @@ async function buildKirimListPage(shopId, page) {
     text += `📅 ${formatDate(r.sana)}\n\n`;
   }
   text += "━━━━━━━━━━━━━━━━━━\n💡 Tahrirlash: Sozlamalar";
-  return { text, total, totalPages, rows: result.rows };
+  return { text, total, totalPages, rows };
 }
 
 bot.callbackQuery("kirim_list", async (ctx) => {
@@ -1633,18 +1148,14 @@ bot.callbackQuery(/^cb_(.+)$/, async (ctx) => {
 });
 
 async function buildChiqimListPage(shopId, page) {
-  const totalRes = await pool.query("SELECT COUNT(*) as c FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-  const total = parseInt(totalRes.rows[0].c, 10);
+  const total = await legacyData.getChiqimCount(shopId);
   if (total === 0) return { text: null, total, totalPages: 0, rows: [] };
   const totalPages = Math.ceil(total / KIRIM_CHIQIM_PAGE_SIZE);
   const offset = page * KIRIM_CHIQIM_PAGE_SIZE;
-  const result = await pool.query(
-    "SELECT * FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-    [shopId, KIRIM_CHIQIM_PAGE_SIZE, offset]
-  );
+  const rows = await legacyData.getChiqimPaginated(shopId, KIRIM_CHIQIM_PAGE_SIZE, offset);
   let text = `<b>Sotuvlar</b> (${offset + 1}-${Math.min(offset + KIRIM_CHIQIM_PAGE_SIZE, total)} / ${total})\n`;
   text += "━━━━━━━━━━━━━━━━━━\n";
-  for (const r of result.rows) {
+  for (const r of rows) {
     text += `ID: <b>${r.id}</b> | 🛞 ${r.razmer} | ${r.balon_turi}\n`;
     text += `📤 ${r.sotildi} ta = ${formatNumber(r.umumiy_qiymat)} so'm`;
     if (r.rabochiy_olindi > 0) {
@@ -1660,7 +1171,7 @@ async function buildChiqimListPage(shopId, page) {
     text += `\n📅 ${formatDate(r.sana)}\n\n`;
   }
   text += "━━━━━━━━━━━━━━━━━━\n💡 Tahrirlash: Sozlamalar";
-  return { text, total, totalPages, rows: result.rows };
+  return { text, total, totalPages, rows };
 }
 
 bot.callbackQuery("chiqim_list", async (ctx) => {
@@ -1715,17 +1226,8 @@ bot.callbackQuery("rep_all", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = getCurrentShopId(ctx);
 
-  const result = await pool.query(`
-    SELECT k.razmer, k.balon_turi,
-      COALESCE(SUM(k.soni), 0) as kirdi,
-      ROUND(AVG(k.kelgan_narx)) as tan_narxi
-    FROM kirim k
-    WHERE (k.shop_id IS NULL OR k.shop_id = $1)
-    GROUP BY k.razmer, k.balon_turi
-    ORDER BY k.razmer
-  `, [shopId]);
-
-  if (result.rows.length === 0) {
+  const result = await legacyData.getKirimGroupedForReport(shopId);
+  if (result.length === 0) {
     await ctx.reply("Ma'lumot yo'q");
     return;
   }
@@ -1733,13 +1235,8 @@ bot.callbackQuery("rep_all", async (ctx) => {
   let text = "📊 <b>UMUMIY XISOBOT</b>\n━━━━━━━━━━━━━━━━━━\n\n";
   let totalFoyda = 0;
 
-  for (const r of result.rows) {
-    const sotildi = await pool.query(
-      "SELECT COALESCE(SUM(sotildi), 0) as s, COALESCE(SUM(foyda), 0) as f FROM chiqim WHERE razmer = $1 AND balon_turi = $2 AND (shop_id IS NULL OR shop_id = $3)",
-      [r.razmer, r.balon_turi, shopId]
-    );
-    const sold = Number(sotildi.rows[0].s);
-    const foyda = Number(sotildi.rows[0].f);
+  for (const r of result) {
+    const { sotildi: sold, foyda } = await legacyData.getChiqimSumsForRazmerBrand(r.razmer, r.balon_turi, shopId);
     const qoldi = Number(r.kirdi) - sold;
 
     text += `🛞 <b>${r.razmer}</b> | ${r.balon_turi}\n`;
@@ -1756,17 +1253,12 @@ bot.callbackQuery("rep_all", async (ctx) => {
 bot.callbackQuery("rep_today", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = getCurrentShopId(ctx);
-  const chiqimRows = await pool.query(
-    "SELECT * FROM chiqim WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)",
-    [shopId]
-  );
-  const rabSotuvRows = await pool.query(
-    "SELECT * FROM rabochiy_sotuv WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)",
-    [shopId]
-  );
+  const today = new Date();
+  const chiqimRows = await legacyData.getChiqimByDate(shopId, today);
+  const rabSotuvRows = await legacyData.getRabochiySotuvByDate(shopId, today);
 
   let naqdTushum = 0, naqdFoyda = 0, rabQoshildiSoni = 0, rabQoshildiSumma = 0, zaxiraFoyda = 0;
-  for (const r of chiqimRows.rows) {
+  for (const r of chiqimRows) {
     const rabSum = (r.rabochiy_olindi || 0) * (r.rabochiy_narxi || 0);
     naqdTushum += Number(r.umumiy_qiymat) - rabSum;
     naqdFoyda += Number(r.naqd_foyda || 0);
@@ -1775,7 +1267,7 @@ bot.callbackQuery("rep_today", async (ctx) => {
     rabQoshildiSumma += rabSum;
   }
   let eskiBalonFoyda = 0;
-  for (const r of rabSotuvRows.rows) {
+  for (const r of rabSotuvRows) {
     eskiBalonFoyda += Number(r.sotilgan_narx || 0) - Number(r.olingan_narx || 0);
   }
   const jamiFoyda = naqdFoyda + zaxiraFoyda + eskiBalonFoyda;
@@ -1788,9 +1280,9 @@ bot.callbackQuery("rep_today", async (ctx) => {
   text += `━━━━━━━━━━━━━━━━━━\n`;
   text += `💰 <b>Jami foyda:</b> ${formatNumber(jamiFoyda)} so'm`;
 
-  if (chiqimRows.rows.length > 0 || rabSotuvRows.rows.length > 0) {
+  if (chiqimRows.length > 0 || rabSotuvRows.length > 0) {
     text += `\n\n━━ <i>Tafsilot</i> ━━\n`;
-    for (const r of chiqimRows.rows) {
+    for (const r of chiqimRows) {
       text += `\n🛞 ${r.razmer} | ${r.balon_turi}: ${r.sotildi} ta = ${formatNumber(r.umumiy_qiymat)} so'm`;
       if (r.naqd_foyda != null) text += ` (Naqd: ${formatNumber(r.naqd_foyda)})`;
       if ((r.zaxira_foyda || 0) > 0) text += ` [Zaxira: ${formatNumber(r.zaxira_foyda)}]`;
@@ -1918,12 +1410,12 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
     if (reportType === "xisobot") {
       // Umumiy xisobot – bosh ko'rsatkichlar (dollarda, rabochiy so'mda)
       const [jamiChiqim, kirimSums, jamiFoyda, skladValuation, rabochiyCount, chiqimTotals] = await Promise.all([
-        pool.query("SELECT COALESCE(SUM(umumiy_qiymat), 0) as s, COALESCE(SUM(foyda), 0) as f FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => ({ sum: Number(r.rows[0].s), foyda: Number(r.rows[0].f) })),
-        pool.query("SELECT COALESCE(SUM(CASE WHEN COALESCE(dollar_kurs,0) = 1 THEN umumiy_qiymat ELSE 0 END), 0) as dollar_sum, COALESCE(SUM(CASE WHEN COALESCE(dollar_kurs,0) <> 1 THEN umumiy_qiymat ELSE 0 END), 0) as soom_sum FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => ({ dollar_sum: Number(r.rows[0].dollar_sum), soom_sum: Number(r.rows[0].soom_sum) })),
-        pool.query("SELECT COALESCE(SUM(foyda), 0) as f FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => Number(r.rows[0].f)),
+        legacyData.getChiqimTotalsAggregate(shopId).then((r) => ({ sum: r.sum, foyda: r.foyda })),
+        legacyData.getKirimTotalsAggregate(shopId),
+        legacyData.getChiqimTotalsAggregate(shopId).then((r) => r.foyda),
         getSkladValuationByTannarx(shopId),
-        pool.query("SELECT COALESCE(SUM(soni), 0) as c FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => Number(r.rows[0].c)),
-        pool.query("SELECT COALESCE(SUM(sotildi), 0) as sotildi, COALESCE(SUM(naqd_foyda), 0) as naqd_foyda, COALESCE(SUM(zaxira_foyda), 0) as zaxira_foyda FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]).then(r => ({ sotildi: Number(r.rows[0].sotildi), naqd_foyda: Number(r.rows[0].naqd_foyda), zaxira_foyda: Number(r.rows[0].zaxira_foyda) }))
+        legacyData.getRabochiyBalonCount(shopId),
+        legacyData.getChiqimTotalsAggregate(shopId).then((r) => ({ sotildi: r.sotildi, naqd_foyda: r.naqd_foyda, zaxira_foyda: r.zaxira_foyda })),
       ]);
       const jamiKirim = kirimSums.soom_sum + kirimSums.dollar_sum * kurs;
       const qoldiqRows = await getSkladRowsWithValuation(shopId);
@@ -1982,7 +1474,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         bSheet.addRow({ balon_turi: brend, dona: v.dona, tannarx_jami: toDollar(v.sum, kurs) });
       }
       // So'ngi chiqimlar (10 ta)
-      const chiqimRows = await pool.query("SELECT id, razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 10", [shopId]);
+      const chiqimRows = await legacyData.getChiqimPaginated(shopId, 10, 0);
       const cSheet = workbook.addWorksheet("So'ngi chiqimlar");
       cSheet.columns = [
         { header: "ID", key: "id", width: 6 },
@@ -1995,25 +1487,26 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         { header: "Foyda ($)", key: "foyda", width: 12 },
         { header: "Sana", key: "sana", width: 10 }
       ];
-      chiqimRows.rows.forEach(row => cSheet.addRow({
+      chiqimRows.forEach((row) => cSheet.addRow({
         ...row,
         umumiy_qiymat: toDollar(row.umumiy_qiymat, kurs),
         foyda: toDollar(row.foyda, kurs),
         naqd_foyda: row.naqd_foyda != null ? toDollar(row.naqd_foyda, kurs) : "-",
-        zaxira_foyda: row.zaxira_foyda != null ? toDollar(row.zaxira_foyda, kurs) : "-"
+        zaxira_foyda: row.zaxira_foyda != null ? toDollar(row.zaxira_foyda, kurs) : "-",
       }));
       // Bugungi hisobot sheet
-      const bugunChiqim = await pool.query("SELECT * FROM chiqim WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)", [shopId]);
-      const bugunRabSotuv = await pool.query("SELECT * FROM rabochiy_sotuv WHERE sana = CURRENT_DATE AND (shop_id IS NULL OR shop_id = $1)", [shopId]);
+      const today = new Date();
+      const bugunChiqim = await legacyData.getChiqimByDate(shopId, today);
+      const bugunRabSotuv = await legacyData.getRabochiySotuvByDate(shopId, today);
       let bugunNaqdTushum = 0, bugunNaqdFoyda = 0, bugunRabQoshildi = 0, bugunZaxira = 0, bugunEskiFoyda = 0;
-      for (const r of bugunChiqim.rows) {
+      for (const r of bugunChiqim) {
         const rs = (r.rabochiy_olindi || 0) * (r.rabochiy_narxi || 0);
         bugunNaqdTushum += Number(r.umumiy_qiymat) - rs;
         bugunNaqdFoyda += Number(r.naqd_foyda || 0);
         bugunZaxira += Number(r.zaxira_foyda || 0);
         bugunRabQoshildi += rs;
       }
-      for (const r of bugunRabSotuv.rows) {
+      for (const r of bugunRabSotuv) {
         bugunEskiFoyda += Number(r.sotilgan_narx || 0) - Number(r.olingan_narx || 0);
       }
       const bugunSheet = workbook.addWorksheet("Bugungi hisobot");
@@ -2024,7 +1517,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       bugunSheet.addRow({ name: "Eski balondan kelgan sof foyda (so'm)", value: formatNumber(bugunEskiFoyda) });
       bugunSheet.addRow({ name: "Jami foyda (so'm)", value: formatNumber(bugunNaqdFoyda + bugunZaxira + bugunEskiFoyda) });
       // So'ngi kirimlar (10 ta)
-      const kirimRows = await pool.query("SELECT id, razmer, balon_turi, soni, umumiy_qiymat, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT 10", [shopId]);
+      const kirimRows = await legacyData.getKirimPaginated(shopId, 10, 0);
       const kSheet = workbook.addWorksheet("So'ngi kirimlar");
       kSheet.columns = [
         { header: "ID", key: "id", width: 6 },
@@ -2034,18 +1527,13 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         { header: "Umumiy ($)", key: "umumiy_qiymat", width: 12 },
         { header: "Sana", key: "sana", width: 10 }
       ];
-      kirimRows.rows.forEach(row => kSheet.addRow({ ...row, umumiy_qiymat: toDollar(row.umumiy_qiymat, kurs) }));
+      kirimRows.forEach((row) => kSheet.addRow({ ...row, umumiy_qiymat: toDollar(row.umumiy_qiymat, kurs) }));
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `xisobot_umumiy_${dateStr}.xlsx`));
     } else if (reportType === "chiqim") {
       const { startDate, endDate } = getDateRange(periodType);
-      let query = "SELECT id, razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, rabochiy_olindi, rabochiy_narxi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)";
-      const params = [shopId];
-      if (periodType !== "all") {
-        query += " AND sana >= $2 AND sana <= $3";
-        params.push(startDate, endDate);
-      }
-      query += " ORDER BY balon_turi, razmer, sana DESC, id DESC";
-      const result = await pool.query(query, params);
+      const result = periodType === "all"
+        ? await legacyData.getChiqimByDateRange(shopId, "2000-01-01", "2099-12-31")
+        : await legacyData.getChiqimByDateRange(shopId, startDate, endDate);
       const sheet = workbook.addWorksheet("Chiqim");
       sheet.columns = [
         { header: "ID", key: "id", width: 8 },
@@ -2060,7 +1548,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         { header: "Rabochiy narx (so'm)", key: "rabochiy_narxi", width: 14 },
         { header: "Sana", key: "sana", width: 12 }
       ];
-      result.rows.forEach((row) => sheet.addRow({
+      result.forEach((row) => sheet.addRow({
         ...row,
         umumiy_qiymat: toDollar(row.umumiy_qiymat, kurs),
         foyda: toDollar(row.foyda, kurs),
@@ -2100,7 +1588,7 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
       }
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `sklad_${dateStr}.xlsx`));
     } else if (reportType === "rabochiy") {
-      const result = await pool.query("SELECT id, razmer, balon_turi, soni, narx, holat, sana FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY balon_turi, razmer, id DESC", [shopId]);
+      const result = await legacyData.getRabochiyBalonList(shopId, false);
       const sheet = workbook.addWorksheet("Rabochiy");
       sheet.columns = [
         { header: "ID", key: "id", width: 8 },
@@ -2111,15 +1599,11 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         { header: "Holat", key: "holat", width: 10 },
         { header: "Sana", key: "sana", width: 12 }
       ];
-      result.rows.forEach((row) => sheet.addRow(row));
+      result.forEach((row) => sheet.addRow(row));
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `rabochiy_${dateStr}.xlsx`));
     } else if (reportType === "kirim") {
       const { startDate, endDate } = periodType === "all" ? { startDate: "2000-01-01", endDate: "2099-12-31" } : getDateRange(periodType);
-      const result = await pool.query(
-        `SELECT id, razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, sana, dollar_kurs, narx_dona 
-         FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 AND sana <= $3 ORDER BY balon_turi, razmer, sana DESC, id DESC`,
-        [shopId, startDate, endDate]
-      );
+      const result = await legacyData.getKirimByDateRange(shopId, startDate, endDate);
       const sheet = workbook.addWorksheet("Kirim");
       sheet.columns = [
         { header: "ID", key: "id", width: 8 },
@@ -2132,14 +1616,14 @@ async function generateExcelAndSend(ctx, reportType, periodType) {
         { header: "Sana", key: "sana", width: 12 },
         { header: "Kurs", key: "dollar_kurs", width: 8 }
       ];
-      result.rows.forEach((row) => {
+      result.forEach((row) => {
         const inDollar = row.dollar_kurs === 1;
         const jamiTanNarx = Number(row.kelgan_narx) * Number(row.soni);
         sheet.addRow({
           ...row,
           kelgan_narx: inDollar ? row.kelgan_narx : toDollar(row.kelgan_narx, kurs),
           sotish_narx: inDollar ? row.sotish_narx : toDollar(row.sotish_narx, kurs),
-          jami_tan_narx: inDollar ? jamiTanNarx : toDollar(jamiTanNarx, kurs)
+          jami_tan_narx: inDollar ? jamiTanNarx : toDollar(jamiTanNarx, kurs),
         });
       });
       await ctx.replyWithDocument(new InputFile(await workbook.xlsx.writeBuffer(), `kirim_${periodType}_${dateStr}.xlsx`));
@@ -2191,24 +1675,24 @@ bot.hears("📋 Royxat", async (ctx) => {
 
 // Razmer va brend ro'yxatini bitta xabarda chiqarish
 async function sendSizesAndBrandsList(ctx) {
-  const [sizesRes, brandsRes] = await Promise.all([
-    pool.query("SELECT * FROM sizes ORDER BY id"),
-    pool.query("SELECT * FROM brands ORDER BY id")
+  const [sizesList, brandsList] = await Promise.all([
+    legacyData.getSizes(),
+    legacyData.getBrands(),
   ]);
   let msg = "📋 <b>Ro'yxatlar</b>\n\n";
   msg += "📏 <b>Razmerlar</b> (ID tartibida):\n";
-  if (sizesRes.rows.length === 0) {
+  if (sizesList.length === 0) {
     msg += "  — bo'sh\n";
   } else {
-    for (const r of sizesRes.rows) {
+    for (const r of sizesList) {
       msg += `  <b>${r.id}</b>. ${r.name}\n`;
     }
   }
   msg += "\n🏷 <b>Brendlar</b> (ID tartibida):\n";
-  if (brandsRes.rows.length === 0) {
+  if (brandsList.length === 0) {
     msg += "  — bo'sh\n";
   } else {
-    for (const r of brandsRes.rows) {
+    for (const r of brandsList) {
       msg += `  <b>${r.id}</b>. ${r.name}\n`;
     }
   }
@@ -2273,14 +1757,15 @@ bot.callbackQuery("rab_sotuv", async (ctx) => {
   await ctx.answerCallbackQuery();
   ctx.session.rab_sav_selected = ctx.session.rab_sav_selected || [];
   const shopId = getCurrentShopId(ctx);
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
-  if (result.rows.length === 0) {
+  const rows = await legacyData.getRabochiyBalonList(shopId, false);
+  const orderById = [...rows].sort((a, b) => a.id - b.id);
+  if (orderById.length === 0) {
     await ctx.reply("Rabochiy balonlar yo'q, sotish mumkin emas.");
     return;
   }
-  const kb = buildRabSavatKeyboard(result.rows, ctx.session.rab_sav_selected);
+  const kb = buildRabSavatKeyboard(orderById, ctx.session.rab_sav_selected);
   const text = "💰 <b>Eski balon sotish</b>\n\nBalonlarni tanlang (tugmani bosganingizda ✅ belgisi tushadi):\n\n" +
-    result.rows.map(r => {
+    orderById.map((r) => {
       const holat = r.holat === 'yaxshi' ? '✅' : r.holat === 'orta' ? '🟡' : '🔴';
       return `🔑 ID ${r.id} — ${r.razmer} | ${r.balon_turi} | ${formatNumber(r.narx)} so'm ${holat}`;
     }).join("\n");
@@ -2299,8 +1784,9 @@ bot.callbackQuery(/^rab_sav_toggle_(\d+)$/, async (ctx) => {
     ctx.session.rab_sav_selected.push(id);
   }
   const shopId = getCurrentShopId(ctx);
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
-  const kb = buildRabSavatKeyboard(result.rows, ctx.session.rab_sav_selected);
+  const rows = await legacyData.getRabochiyBalonList(shopId, false);
+  const orderById = [...rows].sort((a, b) => a.id - b.id);
+  const kb = buildRabSavatKeyboard(orderById, ctx.session.rab_sav_selected);
   try {
     await ctx.editMessageReplyMarkup({ reply_markup: kb });
   } catch (_) {}
@@ -2323,17 +1809,13 @@ bot.callbackQuery("rab_sav_confirm", async (ctx) => {
     await ctx.reply("Hech narsa tanlanmadi.");
     return;
   }
-  const placeholders = selected.map((_, i) => `$${i + 1}`).join(", ");
-  const result = await pool.query(
-    `SELECT id, razmer, balon_turi, narx FROM rabochiy_balon WHERE id IN (${placeholders}) AND soni > 0`,
-    selected
-  );
-  if (result.rows.length !== selected.length) {
+  const result = await legacyData.getRabochiyBalonByIds(selected);
+  if (result.length !== selected.length) {
     await ctx.reply("Ba'zi tanlangan balonlar topilmadi. Qaytadan tanlang.");
     return;
   }
-  const totalOlingan = result.rows.reduce((s, r) => s + Number(r.narx), 0);
-  ctx.session.data = { rab_sav_ids: selected, rab_sav_rows: result.rows };
+  const totalOlingan = result.reduce((s, r) => s + Number(r.narx), 0);
+  ctx.session.data = { rab_sav_ids: selected, rab_sav_rows: result };
   ctx.session.step = "rab_sav_narx";
   ctx.session.rab_sav_selected = [];
   await ctx.reply(
@@ -2386,15 +1868,15 @@ bot.callbackQuery(/^rb_(.+)$/, async (ctx) => {
 bot.callbackQuery("rab_list", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = getCurrentShopId(ctx);
-  const result = await pool.query("SELECT * FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC", [shopId]);
+  const rows = await legacyData.getRabochiyBalonList(shopId, false);
 
-  if (result.rows.length === 0) {
+  if (rows.length === 0) {
     await ctx.reply("Rabochiy balonlar yo'q");
     return;
   }
 
   let msg = "🔄 <b>Rabochiy balonlar ro'yxati</b>\n\n";
-  for (const r of result.rows) {
+  for (const r of rows) {
     const holat = r.holat === 'yaxshi' ? '✅ Yaxshi' : r.holat === 'orta' ? '🟡 O\'rta' : '🔴 Past';
     msg += `🔑 <b>ID: ${r.id}</b> — 🛞 ${r.razmer} | ${r.balon_turi}\n   ${r.soni} ta x ${formatNumber(r.narx)} so'm | ${holat}\n\n`;
   }
@@ -2434,83 +1916,24 @@ bot.callbackQuery(/^ob_(.+)$/, async (ctx) => {
   await ctx.reply("🔢 Nechta kerak?", { reply_markup: backBtn });
 });
 
-// Avtomatik: (1) qoldiq 4 tadan kam bo'lgan pozitsiyalarni olinish_kerak ga qo'shish;
-// (2) bor razmerlar ro'yxatida bo'lib skladda 0 qolgan (razmer+brend) ham olinishi kerakga qo'shiladi (q=0 ham q<4 da)
-async function syncOlinishKerakFromStock(shopId = 1) {
-  const r = await pool.query(`
-    WITH agg AS (
-      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi
-      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
-    ),
-    outgo AS (
-      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
-      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
-    ),
-    qoldiq AS (
-      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q
-      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
-    ),
-    mavjud AS (
-      SELECT razmer, balon_turi FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1)
-    )
-    SELECT q.razmer, q.balon_turi, q.q FROM qoldiq q
-    LEFT JOIN mavjud m ON q.razmer = m.razmer AND q.balon_turi = m.balon_turi
-    WHERE q.q < 4 AND m.razmer IS NULL
-  `, [shopId]);
-  for (const row of r.rows) {
-    const need = Math.max(1, 4 - row.q);
-    await pool.query(
-      "INSERT INTO olinish_kerak (razmer, balon_turi, soni, shop_id) VALUES ($1, $2, $3, $4)",
-      [row.razmer, row.balon_turi, need, shopId]
-    );
-  }
-  // Ro'yxat (Razmerlar) jadvalidagi razmerlar ichida skladda 0 qolganlarni ham olinishi kerakga qo'shish
-  const sizesZero = await pool.query(`
-    WITH agg AS (
-      SELECT k.razmer, k.balon_turi, COALESCE(SUM(k.soni), 0) AS kirdi
-      FROM kirim k WHERE (k.shop_id IS NULL OR k.shop_id = $1) GROUP BY k.razmer, k.balon_turi
-    ),
-    outgo AS (
-      SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS sotildi
-      FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) GROUP BY razmer, balon_turi
-    ),
-    qoldiq AS (
-      SELECT a.razmer, a.balon_turi, GREATEST(0, a.kirdi - COALESCE(o.sotildi, 0))::int AS q
-      FROM agg a LEFT JOIN outgo o ON a.razmer = o.razmer AND a.balon_turi = o.balon_turi
-    ),
-    total_per_razmer AS (
-      SELECT razmer, SUM(q)::int AS total FROM qoldiq GROUP BY razmer
-    ),
-    mavjud_placeholder AS (
-      SELECT razmer FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) AND balon_turi = '—'
-    )
-    SELECT s.name FROM sizes s
-    LEFT JOIN total_per_razmer t ON s.name = t.razmer
-    LEFT JOIN mavjud_placeholder m ON s.name = m.razmer
-    WHERE (t.total IS NULL OR t.total = 0) AND m.razmer IS NULL
-  `, [shopId]);
-  for (const row of sizesZero.rows) {
-    await pool.query(
-      "INSERT INTO olinish_kerak (razmer, balon_turi, soni, shop_id) VALUES ($1, '—', 1, $2)",
-      [row.name, shopId]
-    );
-  }
-}
-
 bot.callbackQuery("ol_list", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = getCurrentShopId(ctx);
   await syncOlinishKerakFromStock(shopId);
-  const result = await pool.query("SELECT * FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
+  const effectiveShopId = shopId ?? 1;
+  const result = await prisma.olinishKerak.findMany({
+    where: { shopId: effectiveShopId },
+    orderBy: { id: 'asc' },
+  });
 
-  if (result.rows.length === 0) {
+  if (result.length === 0) {
     await ctx.reply("Ro'yxat bo'sh. Qoldiq 4 tadan kam bo'lgan pozitsiyalar avtomatik qo'shiladi.");
     return;
   }
 
   let msg = "🛒 <b>Olinishi kerak</b> (ID bo'yicha):\n\n";
-  for (const r of result.rows) {
-    msg += `ID <b>${r.id}</b> — ${r.razmer} | ${r.balon_turi} — ${r.soni} ta\n`;
+  for (const r of result) {
+    msg += `ID <b>${r.id}</b> — ${r.razmer} | ${r.balonTuri} — ${r.soni} ta\n`;
   }
   msg += "\n✏️ Tahrirlash uchun ID raqamini yozing:";
   ctx.session.step = "ol_list_edit_id";
@@ -2532,28 +1955,26 @@ bot.callbackQuery("ol_talab", async (ctx) => {
   await ctx.answerCallbackQuery();
   const shopId = getCurrentShopId(ctx);
   await syncOlinishKerakFromStock(shopId);
-  const list = await pool.query("SELECT id, razmer, balon_turi, soni FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id", [shopId]);
-  if (list.rows.length === 0) {
+  const effectiveShopId = shopId ?? 1;
+  const list = await prisma.olinishKerak.findMany({
+    where: { shopId: effectiveShopId },
+    orderBy: { id: 'asc' },
+    select: { id: true, razmer: true, balonTuri: true, soni: true },
+  });
+  const listRows = list.map((r) => ({ id: r.id, razmer: r.razmer, balon_turi: r.balonTuri, soni: r.soni }));
+  if (listRows.length === 0) {
     await ctx.reply("Olinishi kerak ro'yxati bo'sh. Talab ko'rsatiladi ro'yxatdagi pozitsiyalar bo'yicha.");
     return;
   }
   const today = new Date().toISOString().slice(0, 10);
   const day7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const day30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const sold7 = await pool.query(
-    "SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS s FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 GROUP BY razmer, balon_turi",
-    [shopId, day7]
-  );
-  const sold30 = await pool.query(
-    "SELECT razmer, balon_turi, COALESCE(SUM(sotildi), 0) AS s FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) AND sana >= $2 GROUP BY razmer, balon_turi",
-    [shopId, day30]
-  );
-  const map7 = {};
-  const map30 = {};
-  for (const r of sold7.rows) map7[`${r.razmer}|${r.balon_turi}`] = Number(r.s);
-  for (const r of sold30.rows) map30[`${r.razmer}|${r.balon_turi}`] = Number(r.s);
+  const [map7, map30] = await Promise.all([
+    legacyData.getChiqimSoldByRazmerBrandSince(shopId, day7),
+    legacyData.getChiqimSoldByRazmerBrandSince(shopId, day30),
+  ]);
   let msg = "📊 <b>Talab (sotuvlar)</b>\nSo'nggi 7 kun va 30 kun bo'yicha sotilgan dona:\n\n";
-  for (const r of list.rows) {
+  for (const r of listRows) {
     const key = `${r.razmer}|${r.balon_turi}`;
     const s7 = map7[key] || 0;
     const s30 = map30[key] || 0;
@@ -2617,33 +2038,13 @@ bot.on("message:photo", async (ctx, next) => {
         return;
       }
       const shopId = getCurrentShopId(ctx);
-      let saved = 0;
-      for (const r of rows) {
-        const razmer = sizeToDbFormat(r.size) || r.size;
-        const balon_turi = (r.brand && String(r.brand).trim()) || "Noma'lum";
-        const soni = Math.max(0, Math.round(Number(r.quantity) || 0));
-        const kelgan_narx = Math.round(Number(r.price) || 0);
-        let sotish_narx = Math.round(Number(r.selling_price) || kelgan_narx + 1);
-        if (sotish_narx <= kelgan_narx) sotish_narx = kelgan_narx + 1;
-        const umumiy_qiymat = soni * sotish_narx;
-        if (soni < 1) continue;
-        try {
-          await pool.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [razmer]);
-          await pool.query("INSERT INTO brands (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [balon_turi]);
-          await pool.query(
-            `INSERT INTO kirim (razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, dollar_kurs, narx_dona, shop_id) VALUES ($1, $2, $3, $4, $5, $6, 1, $4, $7)`,
-            [razmer, balon_turi, soni, kelgan_narx, sotish_narx, umumiy_qiymat, shopId]
-          );
-          saved++;
-        } catch (e) {
-          console.error("Kirim OCR qator saqlash xato:", e.message, r);
-        }
-      }
+      const { saved, errors } = await inventoryService.addKirimBatch(rows, shopId, { sizeToDbFormat });
       ctx.session.step = null;
       ctx.session.data = {};
       console.log("=== Rasm orqali kirim saqlandi ===", JSON.stringify(rows, null, 2));
       await ctx.reply(
-        `✅ <b>Rasm orqali kirim</b>\n\n${saved} ta qator kirim jadvaliga saqlandi (narxlar $ da).`,
+        `✅ <b>Rasm orqali kirim</b>\n\n${saved} ta qator kirim jadvaliga saqlandi (narxlar $ da).` +
+          (errors > 0 ? `\n⚠️ ${errors} ta qatorda xato.` : ""),
         { reply_markup: adminMenu, parse_mode: "HTML" }
       );
     } catch (err) {
@@ -2722,21 +2123,8 @@ bot.on("message:text", async (ctx, next) => {
       await ctx.reply("❌ Do'kon nomini kiriting");
       return;
     }
-    const ins = await pool.query(
-      "INSERT INTO shops (name, phone, address, dollar_kurs, report_daily_time, report_weekly_day, created_at, updated_at) VALUES ($1, '', '', '12800', '21:00', '5', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
-      [name]
-    );
-    const newShopId = ins.rows[0].id;
-    const defaults = [
-      ["shop_name", name], ["phone", ""], ["address", ""], ["dollar_kurs", "12800"],
-      ["report_daily_time", "21:00"], ["report_weekly_day", "5"]
-    ];
-    for (const [k, v] of defaults) {
-      await pool.query(
-        "INSERT INTO shop_settings (shop_id, key, value) VALUES ($1, $2, $3) ON CONFLICT (shop_id, key) DO UPDATE SET value = $3",
-        [newShopId, k, v]
-      );
-    }
+    const shop = await shopService.createShop(name);
+    const newShopId = shop.id;
     ctx.session.step = null;
     await ctx.reply(`✅ Do'kon qo'shildi: "${name}" (ID: ${newShopId})`, { reply_markup: bossMenu });
     return;
@@ -2749,14 +2137,11 @@ bot.on("message:text", async (ctx, next) => {
       return;
     }
     const shopId = ctx.session.data?.boss_shop_id || 1;
-    await pool.query(
-      "INSERT INTO shop_admins (telegram_id, shop_id) VALUES ($1, $2) ON CONFLICT (telegram_id, shop_id) DO NOTHING",
-      [tid, shopId]
-    );
-    const shop = await pool.query("SELECT name FROM shops WHERE id = $1", [shopId]);
+    await shopService.addShopAdmin(tid, shopId);
+    const shop = await shopService.getShopById(shopId);
     ctx.session.step = null;
     ctx.session.data = {};
-    await ctx.reply(`✅ Admin (ID: ${tid}) "${shop.rows[0]?.name || shopId}" do'koniga biriktirildi.`, { reply_markup: bossMenu });
+    await ctx.reply(`✅ Admin (ID: ${tid}) "${shop?.name || shopId}" do'koniga biriktirildi.`, { reply_markup: bossMenu });
     return;
   }
 
@@ -2854,7 +2239,7 @@ bot.on("message:text", async (ctx, next) => {
       return;
     }
     const sizeNorm = razmer.toUpperCase();
-    await pool.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [sizeNorm]);
+    await legacyData.ensureSize(sizeNorm);
     ctx.session.step = null;
     const kb = new InlineKeyboard()
       .text("📏 Razmerlar", "list_sizes").text("🏷 Brendlar", "list_brands").row()
@@ -2869,7 +2254,7 @@ bot.on("message:text", async (ctx, next) => {
       await ctx.reply("❌ Brend nomini kiriting");
       return;
     }
-    await pool.query("INSERT INTO brands (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [brand]);
+    await legacyData.ensureBrand(brand);
     ctx.session.step = null;
     const kb = new InlineKeyboard()
       .text("📏 Razmerlar", "list_sizes").text("🏷 Brendlar", "list_brands").row()
@@ -2893,10 +2278,7 @@ bot.on("message:text", async (ctx, next) => {
       ctx.session.data = {};
       return;
     }
-    await pool.query(
-      "INSERT INTO olinish_kerak (razmer, balon_turi, soni, shop_id) VALUES ($1, $2, $3, $4)",
-      [razmer, balon_turi, soni, shopId]
-    );
+    await legacyData.createOlinishKerak(razmer, balon_turi, soni, shopId);
     ctx.session.step = null;
     ctx.session.data = {};
     await ctx.reply(`✅ Olinishi kerak qo'shildi: ${razmer} | ${balon_turi} — ${soni} ta`, { reply_markup: adminMenu });
@@ -2937,13 +2319,14 @@ bot.on("message:text", async (ctx, next) => {
       ctx.session.data = {};
       return;
     }
-    const res = await pool.query("UPDATE olinish_kerak SET soni = $1 WHERE id = $2", [soni, id]);
     ctx.session.step = null;
     ctx.session.data = {};
-    if (res.rowCount === 0) {
-      await ctx.reply("❌ Bunday yozuv topilmadi.");
-    } else {
+    try {
+      await legacyData.updateOlinishKerakSoni(id, soni);
       await ctx.reply(`✏️ Tahrirlandi: olinishi kerak ID ${id} — ${soni} ta`, { reply_markup: adminMenu });
+    } catch (e) {
+      if (e.code === 'P2025') await ctx.reply("❌ Bunday yozuv topilmadi.");
+      else await ctx.reply("❌ Xatolik: " + (e.message || e));
     }
     return;
   }
@@ -2968,10 +2351,8 @@ bot.on("message:text", async (ctx, next) => {
     const tablesWithShop = ["kirim", "chiqim", "olinish_kerak", "rabochiy_balon", "rabochiy_sotuv"];
     const hasShop = tablesWithShop.includes(table);
     try {
-      const res = hasShop
-        ? await pool.query(`DELETE FROM ${table} WHERE id >= $1 AND id <= $2 AND (shop_id IS NULL OR shop_id = $3)`, [minId, maxId, shopId])
-        : await pool.query(`DELETE FROM ${table} WHERE id >= $1 AND id <= $2`, [minId, maxId]);
-      const n = res.rowCount || 0;
+      const res = await legacyData.deleteRange(table, minId, maxId, hasShop ? shopId : null);
+      const n = res.count || 0;
       await ctx.reply(`🗑 O'chirildi: ${table} jadvalida ${n} ta yozuv (ID ${minId}–${maxId}).`, { reply_markup: adminMenu });
     } catch (e) {
       await ctx.reply("❌ O'chirishda xatolik: " + (e.message || e));
@@ -3064,13 +2445,12 @@ bot.on("message:text", async (ctx, next) => {
     };
     const resolvedField = (fieldMap[table] && fieldMap[table][field]) ? fieldMap[table][field] : field;
     try {
-      const quotedField = `"${String(resolvedField).replace(/"/g, '""')}"`;
-      const res = await pool.query(`UPDATE ${table} SET ${quotedField} = $1 WHERE id = $2`, [value, id]);
-      if (res.rowCount === 0) {
+      const affected = await legacyData.updateRow(table, id, resolvedField, value);
+      if (affected === 0) {
         await ctx.reply("❌ Bunday ID topilmadi yoki tahrirlanmadi");
       } else {
         if (table === "kirim" && resolvedField === "sotish_narx") {
-          await pool.query("UPDATE kirim SET umumiy_qiymat = soni * sotish_narx WHERE id = $1", [id]);
+          await legacyData.updateKirimUmumiyQiymat(id);
         }
         const msg = valueInDollar && (field === "kelgan_narx" || field === "sotish_narx")
           ? `✏️ Tahrirlandi: ${resolvedField} = ${formatNumber(value)} so'm`
@@ -3188,7 +2568,7 @@ bot.on("message:text", async (ctx, next) => {
       return;
     }
     const sizeNorm = razmer.toUpperCase();
-    await pool.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [sizeNorm]);
+    await legacyData.ensureSize(sizeNorm);
     ctx.session.data = ctx.session.data || {};
     ctx.session.data.razmer = sizeNorm;
     ctx.session.step = "kirim_brand";
@@ -3207,7 +2587,7 @@ bot.on("message:text", async (ctx, next) => {
       await ctx.reply("❌ Brend nomini kiriting");
       return;
     }
-    await pool.query("INSERT INTO brands (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [brand]);
+    await legacyData.ensureBrand(brand);
     ctx.session.data = ctx.session.data || {};
     ctx.session.data.balon_turi = brand;
     ctx.session.step = "kirim_soni";
@@ -3226,7 +2606,7 @@ bot.on("message:text", async (ctx, next) => {
       return;
     }
     const sizeNorm = razmer.toUpperCase();
-    await pool.query("INSERT INTO sizes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [sizeNorm]);
+    await legacyData.ensureSize(sizeNorm);
     ctx.session.data = ctx.session.data || {};
     ctx.session.data.razmer = sizeNorm;
     ctx.session.step = "rab_brand";
@@ -3355,20 +2735,16 @@ bot.on("message:text", async (ctx, next) => {
       ctx.session.data = {};
       return;
     }
-    const totalOlingan = rab_sav_rows.reduce((s, r) => s + Number(r.narx), 0);
-    const sotilganPerItem = Math.round(sotilganSumma / rab_sav_rows.length);
     const shopId = getCurrentShopId(ctx);
-    for (const row of rab_sav_rows) {
-      await pool.query(
-        "INSERT INTO rabochiy_sotuv (rabochiy_balon_id, razmer, balon_turi, olingan_narx, sotilgan_narx, shop_id) VALUES ($1, $2, $3, $4, $5, $6)",
-        [row.id, row.razmer, row.balon_turi, row.narx, sotilganPerItem, shopId]
-      );
-    }
-    const placeholders = rab_sav_ids.map((_, i) => `$${i + 1}`).join(", ");
-    await pool.query(`DELETE FROM rabochiy_balon WHERE id IN (${placeholders})`, rab_sav_ids);
+    const rows = rab_sav_rows.map((r) => ({
+      id: r.id,
+      razmer: r.razmer,
+      balon_turi: r.balon_turi,
+      narx: Number(r.narx),
+    }));
+    const { totalOlingan, foyda } = await saleService.saveRabochiySotuv(rows, sotilganSumma, shopId);
     ctx.session.step = null;
     ctx.session.data = {};
-    const foyda = sotilganSumma - totalOlingan;
     await ctx.reply(
       `✅ <b>${rab_sav_rows.length} ta rabochiy balon sotildi!</b>\n\n` +
       `📥 Jami olingan: ${formatNumber(totalOlingan)} so'm\n` +
@@ -3389,11 +2765,8 @@ bot.callbackQuery(/^rh_(.+)$/, async (ctx) => {
   const { razmer, balon_turi, soni, narx } = ctx.session.data;
   const shopId = getCurrentShopId(ctx);
 
-  const res = await pool.query(
-    "INSERT INTO rabochiy_balon (razmer, balon_turi, soni, narx, holat, shop_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-    [razmer, balon_turi, soni, narx, holat, shopId]
-  );
-  const newId = res.rows[0]?.id;
+  const r = await saleService.addRabochiyBalon(razmer, balon_turi, soni, narx, holat, shopId);
+  const newId = r.id;
 
   ctx.session.step = null;
   ctx.session.data = {};
@@ -3482,36 +2855,21 @@ async function saveChiqim(ctx) {
   // Naqd Foyda (NF): (Klientdan olingan naqd) - (Sotilgan yangi balonning tannarxi)
   // Zaxira Foyda (ZF): Klientdan olingan rabochiy balonning baholangan narxi
   // Umumiy Foyda (UF): NF + ZF
-  const rabochiySumma = (rabochiy_soni || 0) * (rabochiy_narx || 0);
-  const naqdTushum = umumiy - rabochiySumma; // Kassaga kirgan real naqd
-  const xarajat = (await getKelganNarx(razmer, balon_turi, shopId)) * sotildi;
-  const naqdFoyda = Math.round(naqdTushum - xarajat);
-  const zaxiraFoyda = rabochiySumma;
-  const foyda = naqdFoyda + zaxiraFoyda;
-
-  await pool.query(
-    `INSERT INTO chiqim (razmer, balon_turi, sotildi, umumiy_qiymat, foyda, naqd_foyda, zaxira_foyda, rabochiy_olindi, rabochiy_narxi, shop_id) 
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [razmer, balon_turi, sotildi, umumiy, foyda, naqdFoyda, zaxiraFoyda, rabochiy_soni || 0, rabochiy_narx || 0, shopId]
-  );
-
-  // Rabochiy omborda saqlash — har bitta uchun alohida qator (razmer/brend/holat admin kiritgan)
-  let rabIds = [];
-  if (rabochiy_soni > 0 && rabochiy_razmer && rabochiy_balon_turi) {
-    const holat = rabochiy_holat || "yaxshi";
-    for (let i = 0; i < rabochiy_soni; i++) {
-      const r = await pool.query(
-        "INSERT INTO rabochiy_balon (razmer, balon_turi, soni, narx, holat, shop_id) VALUES ($1, $2, 1, $3, $4, $5) RETURNING id",
-        [rabochiy_razmer, rabochiy_balon_turi, rabochiy_narx, holat, shopId]
-      );
-      rabIds.push(r.rows[0].id);
-    }
-  }
+  const data = {
+    razmer,
+    balon_turi,
+    sotildi,
+    umumiy,
+    rabochiy_soni: rabochiy_soni || 0,
+    rabochiy_narx: rabochiy_narx || 0,
+    rabochiy_razmer,
+    rabochiy_balon_turi,
+    rabochiy_holat,
+  };
+  const { naqdFoyda, zaxiraFoyda, foyda, rabIds } = await saleService.saveChiqim(data, shopId);
 
   ctx.session.step = null;
   ctx.session.data = {};
-
-  await syncOlinishKerakFromStock(shopId);
 
   let msg = `✅ <b>Sotuv saqlandi!</b>\n━━━━━━━━━━━━━━━━━━\n\n` +
     `🛞 ${razmer} | ${balon_turi}\n` +
@@ -3529,38 +2887,25 @@ async function saveChiqim(ctx) {
   await ctx.reply(msg, { reply_markup: adminMenu, parse_mode: "HTML" });
 }
 
-// Eski (Rabochiy) balonlar ombori qiymati va soni
-async function getRabochiyOmborValue(shopId = 1) {
-  const r = await pool.query(
-    "SELECT COALESCE(SUM(soni), 0) as soni, COALESCE(SUM(soni * narx), 0) as summa FROM rabochiy_balon WHERE soni > 0 AND (shop_id IS NULL OR shop_id = $1)",
-    [shopId]
-  );
-  return { soni: Number(r.rows[0].soni), summa: Number(r.rows[0].summa) };
-}
-
 // Davriy hisobot matnini generatsiya qilish (KUNLIK yoki HAFTALIK) — tannarx mantiqi
 async function buildReportText(periodType, startDate, endDate, shopId = 1) {
-  const chiqimRows = await pool.query(
-    "SELECT * FROM chiqim WHERE sana >= $1 AND sana <= $2 AND (shop_id IS NULL OR shop_id = $3)",
-    [startDate, endDate, shopId]
-  );
-  const rabSotuvRows = await pool.query(
-    "SELECT * FROM rabochiy_sotuv WHERE sana >= $1 AND sana <= $2 AND (shop_id IS NULL OR shop_id = $3)",
-    [startDate, endDate, shopId]
-  );
-  const rabOmbor = await getRabochiyOmborValue(shopId);
-  const skladVal = await getSkladValuationByTannarx(shopId);
+  const [chiqimRows, rabSotuvRows, rabOmbor, skladVal] = await Promise.all([
+    saleService.getChiqimByDateRange(startDate, endDate, shopId),
+    saleService.getRabochiySotuvByDateRange(startDate, endDate, shopId),
+    getRabochiyOmborValue(shopId),
+    getSkladValuationByTannarx(shopId),
+  ]);
 
   let naqdTushum = 0, naqdFoyda = 0, zaxiraFoyda = 0;
-  for (const r of chiqimRows.rows) {
-    const rabSum = (r.rabochiy_olindi || 0) * (r.rabochiy_narxi || 0);
-    naqdTushum += Number(r.umumiy_qiymat) - rabSum;
-    naqdFoyda += Number(r.naqd_foyda || 0);
-    zaxiraFoyda += Number(r.zaxira_foyda || 0);
+  for (const r of chiqimRows) {
+    const rabSum = (r.rabochiyOlindi || 0) * (r.rabochiyNarxi || 0);
+    naqdTushum += Number(r.umumiyQiymat) - rabSum;
+    naqdFoyda += Number(r.naqdFoyda || 0);
+    zaxiraFoyda += Number(r.zaxiraFoyda || 0);
   }
   let korrektirovka = 0;
-  for (const r of rabSotuvRows.rows) {
-    korrektirovka += Number(r.sotilgan_narx || 0) - Number(r.olingan_narx || 0);
+  for (const r of rabSotuvRows) {
+    korrektirovka += Number(r.sotilganNarx || 0) - Number(r.olinganNarx || 0);
   }
   const jami = naqdFoyda + zaxiraFoyda + korrektirovka;
 
@@ -3780,14 +3125,11 @@ bot.callbackQuery("editdel_del", async (ctx) => {
     return;
   }
   try {
-    const res = await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
-    if (res.rowCount === 0) {
-      await ctx.reply("❌ Bunday ID topilmadi yoki allaqachon o'chirilgan");
-    } else {
-      await ctx.reply(`🗑 O'chirildi: ${table} (ID: ${id})`, { reply_markup: adminMenu });
-    }
+    await legacyData.deleteById(table, id);
+    await ctx.reply(`🗑 O'chirildi: ${table} (ID: ${id})`, { reply_markup: adminMenu });
   } catch (e) {
-    await ctx.reply("❌ O'chirishda xatolik: " + e.message);
+    if (e.code === 'P2025') await ctx.reply("❌ Bunday ID topilmadi yoki allaqachon o'chirilgan");
+    else await ctx.reply("❌ O'chirishda xatolik: " + (e.message || e));
   }
   ctx.session.step = null;
   ctx.session.data = {};
@@ -3858,71 +3200,45 @@ async function sendEditDelListAndAskId(ctx, tableName, shopId, page = 0) {
   const paginatedTables = ["kirim", "chiqim", "rabochiy_balon", "rabochiy_sotuv"];
 
   if (tableName === "kirim") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getKirimCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, soni, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getKirimPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "📥 <b>Kirim</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta (${formatSana(x.sana)})\n`;
   } else if (tableName === "chiqim") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getChiqimCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, sotildi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getChiqimPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "📤 <b>Chiqim</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.sotildi} ta (${formatSana(x.sana)})\n`;
   } else if (tableName === "olinish_kerak") {
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, soni FROM olinish_kerak WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id",
-      [shopId]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getOlinishKerakList(shopId);
     listMsg = "🛒 <b>Olinishi kerak</b>:\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta\n`;
   } else if (tableName === "sizes") {
-    const r = await pool.query("SELECT id, name FROM sizes ORDER BY id");
-    const rows = r.rows;
+    const rows = await legacyData.getSizes();
     listMsg = "📏 <b>Razmerlar</b>:\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.name}\n`;
   } else if (tableName === "brands") {
-    const r = await pool.query("SELECT id, name FROM brands ORDER BY id");
-    const rows = r.rows;
+    const rows = await legacyData.getBrands();
     listMsg = "🏷 <b>Brendlar</b>:\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.name}\n`;
   } else if (tableName === "rabochiy_balon") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getRabochiyBalonRowCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, soni, narx, holat FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getRabochiyBalonPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "🔄 <b>Rabochiy balon</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta, ${formatNumber(x.narx)} so'm (${x.holat || ""})\n`;
   } else if (tableName === "rabochiy_sotuv") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getRabochiySotuvCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, olingan_narx, sotilgan_narx, sana FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getRabochiySotuvPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "🔄 <b>Rabochiy sotuv</b> (" + from + "-" + to + " / " + total + "):\n\n";
@@ -3947,53 +3263,33 @@ bot.callbackQuery(/^editdel_list_(kirim|chiqim|rabochiy_balon|rabochiy_sotuv)_(\
   let totalPages = 1;
 
   if (tableName === "kirim") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM kirim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getKirimCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, soni, sana FROM kirim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getKirimPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "📥 <b>Kirim</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta (${formatSana(x.sana)})\n`;
   } else if (tableName === "chiqim") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getChiqimCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, sotildi, sana FROM chiqim WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getChiqimPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "📤 <b>Chiqim</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.sotildi} ta (${formatSana(x.sana)})\n`;
   } else if (tableName === "rabochiy_balon") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getRabochiyBalonRowCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, soni, narx, holat FROM rabochiy_balon WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getRabochiyBalonPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "🔄 <b>Rabochiy balon</b> (" + from + "-" + to + " / " + total + "):\n\n";
     for (const x of rows) listMsg += `ID <b>${x.id}</b> — ${x.razmer} | ${x.balon_turi} — ${x.soni} ta, ${formatNumber(x.narx)} so'm (${x.holat || ""})\n`;
   } else if (tableName === "rabochiy_sotuv") {
-    const countR = await pool.query("SELECT COUNT(*) as c FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1)", [shopId]);
-    total = parseInt(countR.rows[0].c, 10);
+    total = await legacyData.getRabochiySotuvCount(shopId);
     totalPages = Math.ceil(total / EDITDEL_PAGE_SIZE) || 1;
-    const r = await pool.query(
-      "SELECT id, razmer, balon_turi, olingan_narx, sotilgan_narx, sana FROM rabochiy_sotuv WHERE (shop_id IS NULL OR shop_id = $1) ORDER BY id DESC LIMIT $2 OFFSET $3",
-      [shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE]
-    );
-    const rows = r.rows;
+    const rows = await legacyData.getRabochiySotuvPaginated(shopId, EDITDEL_PAGE_SIZE, page * EDITDEL_PAGE_SIZE);
     const from = page * EDITDEL_PAGE_SIZE + 1;
     const to = Math.min((page + 1) * EDITDEL_PAGE_SIZE, total);
     listMsg = "🔄 <b>Rabochiy sotuv</b> (" + from + "-" + to + " / " + total + "):\n\n";
@@ -4059,10 +3355,7 @@ bot.callbackQuery("editdel_mode_clear", async (ctx) => {
   const shopId = getCurrentShopId(ctx);
   const tablesWithShop = ["kirim", "chiqim", "olinish_kerak", "rabochiy_balon", "rabochiy_sotuv"];
   const hasShop = tablesWithShop.includes(table);
-  const countRes = hasShop
-    ? await pool.query(`SELECT COUNT(*) as c FROM ${table} WHERE (shop_id IS NULL OR shop_id = $1)`, [shopId])
-    : await pool.query(`SELECT COUNT(*) as c FROM ${table}`);
-  const count = parseInt(countRes.rows[0].c, 10);
+  const count = await legacyData.getTableCount(table, hasShop ? shopId : null);
   const kb = new InlineKeyboard()
     .text("✅ Ha, barchasini o'chirish", "editdel_clear_yes").row()
     .text("🔙 Bekor qilish", "settings_editdel");
@@ -4081,10 +3374,7 @@ bot.callbackQuery("editdel_clear_yes", async (ctx) => {
   const tablesWithShop = ["kirim", "chiqim", "olinish_kerak", "rabochiy_balon", "rabochiy_sotuv"];
   const hasShop = tablesWithShop.includes(table);
   try {
-    const res = hasShop
-      ? await pool.query(`DELETE FROM ${table} WHERE (shop_id IS NULL OR shop_id = $1)`, [shopId])
-      : await pool.query(`DELETE FROM ${table}`);
-    const n = res.rowCount || 0;
+    const n = await legacyData.deleteAllFromTable(table, hasShop ? shopId : null);
     await ctx.reply(`🗑 <b>${table}</b> jadvali tozalandi. O'chirildi: ${n} ta yozuv.`, { parse_mode: "HTML", reply_markup: adminMenu });
   } catch (e) {
     await ctx.reply("❌ O'chirishda xatolik: " + (e.message || e));
@@ -4149,13 +3439,13 @@ async function sendScheduledReports() {
 
   try {
     await withRetry(async () => {
-    const shops = await pool.query("SELECT id FROM shops ORDER BY id");
-    for (const row of shops.rows) {
+    const shops = await shopService.getShops();
+    for (const row of shops) {
       const shopId = row.id;
       const dailyTime = await getSetting("report_daily_time", shopId) || "21:00";
       const weeklyDay = parseInt(await getSetting("report_weekly_day", shopId) || "5");
-      const adminRows = await pool.query("SELECT telegram_id FROM shop_admins WHERE shop_id = $1", [shopId]);
-      let adminIds = adminRows.rows.map((r) => Number(r.telegram_id));
+      const adminIdsRaw = await shopService.getShopAdmins(shopId);
+      let adminIds = adminIdsRaw.map((tid) => Number(tid));
       if (!adminIds.includes(BOSS_ADMIN_TELEGRAM_ID)) adminIds = [...adminIds, BOSS_ADMIN_TELEGRAM_ID];
       if (adminIds.length === 0) continue;
 
@@ -4163,7 +3453,8 @@ async function sendScheduledReports() {
         if (lastDailyByShop[shopId] !== todayStr) {
           const { startDate, endDate } = getDateRangeTashkent("day");
           const text = await buildReportText("day", startDate, endDate, shopId);
-          const shopName = (await pool.query("SELECT name FROM shops WHERE id = $1", [shopId])).rows[0]?.name || "Do'kon";
+          const shop = await shopService.getShopById(shopId);
+          const shopName = shop?.name || "Do'kon";
           const header = `🏪 <b>${shopName}</b>\n\n`;
           for (const chatId of adminIds) {
             try {
@@ -4179,7 +3470,8 @@ async function sendScheduledReports() {
       if (timeStr === dailyTime && dayOfWeek === weeklyDay && lastWeeklyByShop[shopId] !== weekKey) {
         const { startDate, endDate } = getDateRangeTashkent("week");
         const text = await buildReportText("week", startDate, endDate, shopId);
-        const shopName = (await pool.query("SELECT name FROM shops WHERE id = $1", [shopId])).rows[0]?.name || "Do'kon";
+        const shop = await shopService.getShopById(shopId);
+        const shopName = shop?.name || "Do'kon";
         const header = `🏪 <b>${shopName}</b> (haftalik)\n\n`;
         for (const chatId of adminIds) {
           try {
@@ -4203,23 +3495,10 @@ async function sendScheduledReports() {
   }
 }
 
-app.get('/', (req, res) => res.send('Bot is running!'));
-
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
-
 // ==================== START BOT ====================
 async function main() {
-  await ensureDollarHistoryTable();
-  await initDB();
-  await ensureChiqimFoydaColumns();
-  await ensureRabochiySotuvTable();
-  await ensureShopsAndAdmins();
-  await ensureIndexes();
+  await runInit();
   console.log("🚀 Bot ishga tushdi...");
-  const res = await pool.query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'");
-  console.log("Mavjud jadvallar:", res.rows.map(r => r.table_name));
   bot.start();
 
   cron.schedule("* * * * *", sendScheduledReports);

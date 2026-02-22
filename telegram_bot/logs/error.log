@@ -488,3 +488,122 @@ The table `public.admins` does not exist in the current database.
     at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:62:13
     at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
     at async /home/abduqodir/Desktop/telegram-bot-for-tires-main/telegram_bot/node_modules/grammy/out/composer.js:57:9
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "rabochiy_sotuv" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "shop_settings" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "dollar_history" does not exist`
+2026-02-22 13:48:38 [ERROR]: Prisma Error: 
+Invalid `prisma.size.upsert()` invocation:
+
+
+The table `public.sizes` does not exist in the current database.
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "chiqim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "kirim" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "rabochiy_sotuv" does not exist`
+2026-02-22 14:17:02 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "shop_settings" does not exist`
+2026-02-22 14:17:03 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `42P01`. Message: `relation "dollar_history" does not exist`
+2026-02-22 14:36:43 [ERROR]: Prisma Error: 
+Invalid `prisma.kirim.count()` invocation:
+
+{
+  select: {
+    _count: {
+      select: {
+        _all: true
+      }
+    }
+  },
+  where: {
+    OR: [
+      {
+        shopId: null
+      },
+      {
+        shopId: 1
+      }
+    ]
+  }
+}
+
+Argument `shopId` is missing.

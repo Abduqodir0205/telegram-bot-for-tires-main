@@ -24,7 +24,7 @@ class ExcelService {
   async generateInventoryReport(shopId) {
     try {
       const [newTires, usedTires, shop] = await Promise.all([
-        prisma.tire.findMany({ where: { shopId } }),
+        prisma.kirim.findMany({ where: { shopId } }),
         prisma.usedTire.findMany({ where: { shopId } }),
         prisma.shop.findUnique({ where: { id: shopId } }),
       ]);
@@ -129,7 +129,7 @@ class ExcelService {
   async generateSalesReport(shopId, startDate, endDate) {
     try {
       const [sales, shop] = await Promise.all([
-        prisma.sale.findMany({
+        prisma.chiqim.findMany({
           where: {
             shopId,
             createdAt: {
@@ -162,8 +162,8 @@ class ExcelService {
       let totalUsedRevenue = 0;
 
       sales.forEach((sale, index) => {
-        const tireInfo = sale.tire 
-          ? `${sale.tire.brand} ${sale.tire.size}`
+        const tireInfo = sale.kirim 
+          ? `${sale.kirim.brand} ${sale.kirim.size}`
           : `${sale.usedTire?.size || 'N/A'} (${translateCondition(sale.usedTire?.condition)})`;
         
         const price = sale.totalPrice / sale.quantity;
@@ -210,16 +210,16 @@ class ExcelService {
   async generateFullReport(shopId) {
     try {
       const [newTires, usedTires, sales, warehouseLogs, shop] = await Promise.all([
-        prisma.tire.findMany({ where: { shopId } }),
+        prisma.kirim.findMany({ where: { shopId } }),
         prisma.usedTire.findMany({ where: { shopId } }),
-        prisma.sale.findMany({
+        prisma.chiqim.findMany({
           where: { shopId },
-          include: { tire: true, usedTire: true },
+          include: { kirim: true, usedTire: true },
           orderBy: { createdAt: 'desc' },
           take: 100,
         }),
         prisma.warehouseLog.findMany({
-          include: { tire: true, usedTire: true },
+          include: { kirim: true, usedTire: true },
           orderBy: { createdAt: 'desc' },
           take: 100,
         }),
@@ -274,8 +274,8 @@ class ExcelService {
       ];
 
       sales.forEach(sale => {
-        const tireInfo = sale.tire 
-          ? `${sale.tire.brand} ${sale.tire.size}`
+        const tireInfo = sale.kirim 
+          ? `${sale.kirim.brand} ${sale.kirim.size}`
           : `${sale.usedTire?.size || 'N/A'}`;
         salesData.push([
           formatShortDate(sale.createdAt),
@@ -297,8 +297,8 @@ class ExcelService {
       ];
 
       warehouseLogs.forEach(log => {
-        const tireInfo = log.tire 
-          ? `${log.tire.brand} ${log.tire.size}`
+        const tireInfo = log.kirim 
+          ? `${log.kirim.brand} ${log.kirim.size}`
           : `${log.usedTire?.size || 'N/A'}`;
         logsData.push([
           formatShortDate(log.createdAt),

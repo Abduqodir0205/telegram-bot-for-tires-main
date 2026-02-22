@@ -5,13 +5,13 @@ class WarehouseService {
   async getWarehouseSummary(shopId) {
     try {
       // New tires summary
-      const newTires = await prisma.tire.aggregate({
+      const newTires = await prisma.kirim.aggregate({
         where: { shopId },
         _sum: { quantity: true },
         _count: true,
       });
 
-      const newTiresValue = await prisma.tire.findMany({
+      const newTiresValue = await prisma.kirim.findMany({
         where: { shopId },
         select: { quantity: true, priceBuy: true, priceSell: true },
       });
@@ -68,7 +68,7 @@ class WarehouseService {
   }
 
   async getNewTiresStock(shopId) {
-    return prisma.tire.findMany({
+    return prisma.kirim.findMany({
       where: { shopId },
       orderBy: [{ brand: 'asc' }, { size: 'asc' }],
     });
@@ -83,7 +83,7 @@ class WarehouseService {
 
   async getOutOfStock(shopId) {
     const [newTires, usedTires] = await Promise.all([
-      prisma.tire.findMany({
+      prisma.kirim.findMany({
         where: { shopId, quantity: 0 },
       }),
       prisma.usedTire.findMany({
@@ -96,7 +96,7 @@ class WarehouseService {
 
   async getLowStock(shopId, threshold = 3) {
     const [newTires, usedTires] = await Promise.all([
-      prisma.tire.findMany({
+      prisma.kirim.findMany({
         where: { 
           shopId, 
           quantity: { gt: 0, lte: threshold } 

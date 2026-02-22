@@ -207,8 +207,8 @@ sales.hears('📜 Sotuvlar tarixi', async (ctx) => {
     
     for (const sale of result.sales) {
       const typeIcon = sale.itemType === 'NEW' ? '🛞' : '♻️';
-      const tireInfo = sale.tire 
-        ? `${sale.tire.brand} ${sale.tire.size}`
+      const tireInfo = sale.kirim 
+        ? `${sale.kirim.brand} ${sale.kirim.size}`
         : `${sale.usedTire.size} - ${translateCondition(sale.usedTire.condition)}`;
       
       message += `${typeIcon} *${tireInfo}*\n`;
@@ -241,8 +241,8 @@ sales.callbackQuery(/^sales_page_(\d+)$/, async (ctx) => {
   
   for (const sale of result.sales) {
     const typeIcon = sale.itemType === 'NEW' ? '🛞' : '♻️';
-    const tireInfo = sale.tire 
-      ? `${sale.tire.brand} ${sale.tire.size}`
+    const tireInfo = sale.kirim 
+      ? `${sale.kirim.brand} ${sale.kirim.size}`
       : `${sale.usedTire.size} - ${translateCondition(sale.usedTire.condition)}`;
     
     message += `${typeIcon} *${tireInfo}*\n`;
