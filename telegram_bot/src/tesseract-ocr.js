@@ -49,10 +49,24 @@ function isValidTireSize(w, h, r) {
 }
 
 /**
- * Butun qator matnidan barcha raqamlarni yig'ib, ichidan birinchi haqiqiy 7 xonali razmerni qaytaradi.
- * Masalan: "...1657013..." yoki "1757013" qatorda bo'lsa, 165/70/13 yoki 175/70/13 topiladi.
+ * Qatordan razmerni topadi. Qo'llab-quvvatlanadi: 165/70 R13 (7 raqam), 165R13C, 195/75/16C.
  */
 function findSizeInLine(cleanLine) {
+  // 165R13C yoki 195/75/16C kabi format (3 raqam + R + 2 raqam + ixtiyoriy C)
+  const shortR = cleanLine.match(/(\d{3})\s*[Rr]\s*(\d{2})\s*C?\b/i);
+  if (shortR) {
+    const r = parseInt(shortR[2], 10);
+    if (r >= 10 && r <= 24) return /C/i.test(cleanLine) ? `${shortR[1]}R${shortR[2]}C` : `${shortR[1]}R${shortR[2]}`;
+  }
+  // 195/75/16C (3/2/2 + C)
+  const threePart = cleanLine.match(/(\d{3})[\/\s]+(\d{2})[\/\s]+(\d{2})\s*C?\b/i);
+  if (threePart) {
+    const w = parseInt(threePart[1], 10);
+    const h = parseInt(threePart[2], 10);
+    const r = parseInt(threePart[3], 10);
+    if (isValidTireSize(threePart[1], threePart[2], threePart[3]))
+      return /C\s*$/i.test(cleanLine) ? `${threePart[1]}/${threePart[2]}/${threePart[3]}C` : `${threePart[1]}/${threePart[2]}/${threePart[3]}`;
+  }
   const allDigits = cleanLine.replace(/\D/g, "");
   if (allDigits.length < 7) return null;
   for (let i = 0; i <= allDigits.length - 7; i++) {
@@ -104,6 +118,19 @@ function findPriceAndTotal(tokens) {
     for (let j = i - 1; j >= Math.max(0, n - 5); j--) {
       const out = tryPair(vals[i], vals[j]);
       if (out) return out;
+    }
+  }
+  // Jadvalda faqat Soni va Kelgan narx ($) bo'lsa: biri 1–100 (soni), biri 15–300 (narx)
+  for (let i = n - 1; i >= Math.max(0, n - 4); i--) {
+    for (let j = i - 1; j >= Math.max(0, n - 5); j--) {
+      const a = vals[i];
+      const b = vals[j];
+      const qtyA = Math.round(a);
+      const qtyB = Math.round(b);
+      const likeQty = (x) => Number.isInteger(x) && x >= 1 && x <= 150;
+      const likePrice = (x) => (x >= 15 && x <= 500) || x >= 1000;
+      if (likeQty(qtyA) && likePrice(b)) return { price: b, total: qtyA * b };
+      if (likeQty(qtyB) && likePrice(a)) return { price: a, total: qtyB * a };
     }
   }
   return null;
@@ -195,8 +222,12 @@ function parseTableText(text) {
     const expectedTotal = qty * price;
     if (Math.abs(expectedTotal - total) > Math.max(1, total * 0.05)) continue;
 
-    // Avval razmerni topamiz, keyin brendni to'liq (razmerdan tashqari matn) qilib olamiz
+    // Avval razmerni topamiz (165/70 R13, 165R13C, 195/75/16C), keyin brendni
     let size = findSizeInLine(cleanLine);
+    if (!size) {
+      const shortSizeToken = tokens.find((t) => /^\d{3}[Rr]\d{2}C?$/i.test(t));
+      if (shortSizeToken) size = shortSizeToken.replace(/\s/g, "");
+    }
     if (!size) {
       const numericTokens = tokens.filter((t) => /[0-9]/.test(t));
       const sizeSourceTokens = numericTokens.slice(
@@ -221,14 +252,22 @@ function parseTableText(text) {
     const brand = extractBrand(tokens, size);
     if (!brand) continue;
 
-    const selling_price = price + 100000;
+    // Soni 1–150, narx 15–500 (yoki 100k+). Almashib qolsa tuzatish
+    let finalQty = qty;
+    let finalPrice = price;
+    if (qty > 150 && price >= 1 && price <= 150 && Number.isInteger(price)) {
+      finalQty = price;
+      finalPrice = qty;
+    }
+
+    const selling_price = finalPrice + 100000;
 
     rows.push({
       brand: String(brand).trim(),
       size,
-      quantity: qty,
-      price,
-      total,
+      quantity: finalQty,
+      price: finalPrice,
+      total: finalQty * finalPrice,
       selling_price,
     });
   }

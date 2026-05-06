@@ -607,3 +607,13 @@ Invalid `prisma.kirim.count()` invocation:
 }
 
 Argument `shopId` is missing.
+2026-02-23 11:35:44 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `22003`. Message: `ERROR: setval: value 0 is out of bounds for sequence "tires_id_seq" (1..2147483647)`
+2026-02-23 12:37:00 [ERROR]: Prisma Error: 
+Invalid `prisma.$executeRawUnsafe()` invocation:
+
+
+Raw query failed. Code: `22003`. Message: `ERROR: setval: value 0 is out of bounds for sequence "tires_id_seq" (1..2147483647)`

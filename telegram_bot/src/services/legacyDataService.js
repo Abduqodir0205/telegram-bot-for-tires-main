@@ -344,6 +344,36 @@ async function getTableCount(table, shopId) {
   return fn();
 }
 
+const TABLE_TO_PHYSICAL_NAME = {
+  kirim: 'tires',
+  chiqim: 'sales',
+  rabochiy_balon: 'rabochiy_balon',
+  rabochiy_sotuv: 'rabochiy_sotuv',
+  olinish_kerak: 'olinish_kerak',
+  sizes: 'sizes',
+  brands: 'brands',
+};
+
+/** Jadval bo'sh bo'lsa PostgreSQL sequence ni qaytaradi – keyingi id 1 dan boshlanadi */
+async function resetTableSequenceIfEmpty(physicalTable) {
+  const countResult = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(*)::int AS c FROM "${physicalTable}"`
+  );
+  const count = (countResult && countResult[0] && countResult[0].c) ? countResult[0].c : 0;
+  if (count > 0) return;
+  const seqName = `"${physicalTable}_id_seq"`;
+  try {
+    await prisma.$executeRawUnsafe(
+      `SELECT setval((SELECT pg_get_serial_sequence($1, 'id')), 0)`,
+      physicalTable
+    );
+  } catch (_) {
+    try {
+      await prisma.$executeRawUnsafe(`ALTER SEQUENCE ${seqName} RESTART WITH 1`);
+    } catch (__) {}
+  }
+}
+
 async function deleteAllFromTable(table, shopId) {
   const withShop = ['kirim', 'chiqim', 'rabochiy_balon', 'rabochiy_sotuv', 'olinish_kerak'];
   const sid = shopId ?? DEFAULT_SHOP_ID;
@@ -360,6 +390,8 @@ async function deleteAllFromTable(table, shopId) {
   const model = models[table];
   if (!model) throw new Error('Unknown table');
   const result = await model.deleteMany({ where });
+  const physicalTable = TABLE_TO_PHYSICAL_NAME[table];
+  if (physicalTable) await resetTableSequenceIfEmpty(physicalTable);
   return result.count;
 }
 

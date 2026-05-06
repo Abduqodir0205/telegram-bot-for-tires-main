@@ -1997,11 +1997,14 @@ function downloadTelegramFile(token, filePath) {
   });
 }
 
-// Razmerni 165/70/13 -> 165/70 R13 formatiga (baza uchun)
+// Razmerni baza formatiga: 165/70/13 -> 165/70 R13; 165R13C, 195/75/16C o'zgartirilmaydi
 function sizeToDbFormat(s) {
   if (!s || typeof s !== "string") return s;
-  const m = s.trim().match(/(\d{3})[\/\s]*(\d{2})[\/\s]*(\d{2})/);
-  return m ? `${m[1]}/${m[2]} R${m[3]}` : s;
+  const t = s.trim();
+  const m = t.match(/(\d{3})[\/\s]*(\d{2})[\/\s]*(\d{2})/);
+  if (m) return `${m[1]}/${m[2]} R${m[3]}${/C\s*$/i.test(t) ? "C" : ""}`;
+  // 165R13C kabi formatni saqlash
+  return t;
 }
 
 bot.on("message:photo", async (ctx, next) => {
