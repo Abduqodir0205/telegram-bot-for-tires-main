@@ -4,17 +4,20 @@ FROM node:20-slim
 RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     libtesseract-dev \
+    openssl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
+# Avval faqat package fayllarini ko'chirib, o'rnatamiz
 COPY package*.json ./
 RUN npm install
 
+# Keyin loyiha fayllarini va Prisma sxemasini ko'chiramiz
 COPY . .
 
-# Prisma client'ni generatsiya qilish
+# Prisma-ni majburiy generatsiya qilish
 RUN npx prisma generate
 
-# Botni ishga tushirish (src/index.js orqali)
-CMD ["node", "src/index.js"]
+# Botni ishga tushirish
+CMD npx prisma db push && node src/index.js

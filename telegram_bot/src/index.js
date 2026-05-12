@@ -120,15 +120,7 @@ function formatSana(d) {
   return String(d);
 }
 
-// Summani yaxlitlash: 488000 -> 500000, 420000/430000 -> 450000 (50 mingga yuqoriga)
-function yaxlitla(som) {
-  const s = Number(som) || 0;
-  if (s <= 0) return 0;
-  if (s < 100000) return Math.round(s / 10000) * 10000;
-  return Math.ceil(s / 50000) * 50000;
-}
-
-// Kirim saqlash: sotish narxini (son + tur) oladi, yaxlitlab bazaga yozadi va xabar yuboradi
+// Kirim saqlash: sotish narxini (son + tur) oladi, bazaga yozadi va xabar yuboradi
 async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
   const data = ctx.session.data || {};
   const razmer = data.razmer;
@@ -147,7 +139,7 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
   const kelganSomXom = narx_type === "dollar" ? Math.round((kelgan_narx_input || 0) * kurs) : Math.round(kelgan_narx_input || 0);
   const sotishSomXom = sotishType === "dollar" ? Math.round(sotishNum * kurs) : Math.round(sotishNum);
   const kelganSom = kelganSomXom; // Tan narx yaxlitlanmaydi
-  const sotishSom = yaxlitla(sotishSomXom);
+  const sotishSom = sotishSomXom;
   const umumiySom = soni * sotishSom;
   try {
     await legacyData.createKirim({
@@ -176,8 +168,7 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
   ctx.session.step = null;
   ctx.session.data = {};
   const tanDollar = (kelganSom / kurs).toFixed(1);
-  const sotishXomStr = formatNumber(sotishSomXom);
-  const sotishYaxlitStr = formatNumber(sotishSom);
+  const sotishSomStr = formatNumber(sotishSom);
   await ctx.api.sendChatAction(ctx.chat.id, "typing");
   await ctx.reply(
     `✅ <b>Kirim saqlandi!</b>\n\n` +
@@ -185,8 +176,8 @@ async function saveKirimWithSotishNarx(ctx, sotishNum, sotishType) {
     `📥 ${soni} ta\n\n` +
     `💵 Tan narx: ${tanDollar} $ = <b>${formatNumber(kelganSom)} so'm</b>\n` +
     (sotishType === "dollar"
-      ? `💰 Sotish narx: ${sotishNum} $ → ${sotishXomStr} so'm → <b>${sotishYaxlitStr} so'm</b> (yaxlitlangan)\n`
-      : `💰 Sotish narx: ${formatNumber(sotishSomXom)} so'm → <b>${sotishYaxlitStr} so'm</b> (yaxlitlangan)\n`) +
+      ? `💰 Sotish narx: ${sotishNum} $ → <b>${sotishSomStr} so'm</b>\n`
+      : `💰 Sotish narx: <b>${sotishSomStr} so'm</b>\n`) +
     `📊 Jami: <b>${formatNumber(umumiySom)} so'm</b>`,
     { reply_markup: adminMenu, parse_mode: "HTML" }
   );
@@ -575,9 +566,21 @@ bot.callbackQuery(/^user_size_(.+)$/, async (ctx) => {
 
   let text = `🛞 <b>${razmer}</b>\n\n`;
   for (const balon_turi of brands) {
-    const narx = await getSotishNarx(razmer, balon_turi, shopId);
+    const [narx, stock, tanSom] = await Promise.all([
+      getSotishNarx(razmer, balon_turi, shopId),
+      getStock(razmer, balon_turi, shopId),
+      getKelganNarx(razmer, balon_turi, shopId),
+    ]);
     const narx4 = narx * 4;
-    text += `🏷 <b>${balon_turi}</b>\n💵 ${formatNumber(narx)} / dona | 4 ta: ${formatNumber(narx4)} so'm\n\n`;
+    const tanLine =
+      tanSom > 0
+        ? `📥 Tan narx: ${formatNumber(tanSom)} / dona | 4 ta: ${formatNumber(tanSom * 4)} so'm\n`
+        : `📥 Tan narx: —\n`;
+    text +=
+      `🏷 <b>${balon_turi}</b>\n` +
+      `📦 Skladda: <b>${stock}</b> ta\n` +
+      tanLine +
+      `💵 ${formatNumber(narx)} / dona | 4 ta: ${formatNumber(narx4)} so'm\n\n`;
   }
 
   const menu = await getMainMenu(ctx);

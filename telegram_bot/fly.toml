@@ -1,0 +1,10 @@
+app = 'shershina-bot'
+primary_region = 'arn'
+
+[build]
+  dockerfile = "Dockerfile"
+
+
+[[vm]]
+  memory = '1gb'
+  cpus = 1

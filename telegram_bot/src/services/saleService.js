@@ -117,11 +117,40 @@ async function saveRabochiySotuv(rows, totalSotilganSumma, shopId = 1) {
  */
 const DEFAULT_SHOP_ID = 1;
 
+/** YYYY-MM-DD yoki Date — mahalliy kalendar kuni (Prisma DateTime `gte`/`lte` uchun to'liq Date). */
+function parseCalendarDate(input) {
+  if (input instanceof Date) {
+    return new Date(input.getFullYear(), input.getMonth(), input.getDate());
+  }
+  const str = String(input);
+  const m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+  }
+  const d = new Date(str);
+  if (Number.isNaN(d.getTime())) throw new Error(`Invalid date: ${input}`);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function startOfCalendarDay(input) {
+  const d = parseCalendarDate(input);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfCalendarDay(input) {
+  const d = parseCalendarDate(input);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
 async function getChiqimByDateRange(startDate, endDate, shopId = 1) {
   const sid = shopId ?? DEFAULT_SHOP_ID;
+  const gte = startOfCalendarDay(startDate);
+  const lte = endOfCalendarDay(endDate);
   return prisma.chiqim.findMany({
     where: {
-      createdAt: { gte: startDate, lte: endDate },
+      createdAt: { gte, lte },
       shopId: sid,
     },
     orderBy: { id: 'desc' },
@@ -134,9 +163,11 @@ async function getChiqimByDateRange(startDate, endDate, shopId = 1) {
  */
 async function getRabochiySotuvByDateRange(startDate, endDate, shopId = 1) {
   const sid = shopId ?? DEFAULT_SHOP_ID;
+  const gte = startOfCalendarDay(startDate);
+  const lte = endOfCalendarDay(endDate);
   return prisma.rabochiySotuv.findMany({
     where: {
-      sana: { gte: startDate, lte: endDate },
+      sana: { gte, lte },
       shopId: sid,
     },
     orderBy: { id: 'desc' },
@@ -151,8 +182,8 @@ async function getChiqimTotals(shopId, startDate, endDate = null) {
   const where = { shopId: sid };
   if (startDate || endDate) {
     where.createdAt = {};
-    if (startDate) where.createdAt.gte = startDate;
-    if (endDate) where.createdAt.lte = endDate;
+    if (startDate) where.createdAt.gte = startOfCalendarDay(startDate);
+    if (endDate) where.createdAt.lte = endOfCalendarDay(endDate);
   }
 
   const agg = await prisma.chiqim.aggregate({
