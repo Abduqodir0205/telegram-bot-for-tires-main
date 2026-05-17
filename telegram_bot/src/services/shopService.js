@@ -197,30 +197,64 @@ async function getShopAdmins(shopId) {
 }
 
 /**
+ * shops_id_seq ni joriy max id ga moslash (keyingi INSERT lar uchun).
+ */
+async function setShopSequenceAfterId(lastId) {
+  await prisma.$executeRaw`
+    SELECT setval(
+      pg_get_serial_sequence('public.shops', 'id'),
+      ${lastId},
+      true
+    )
+  `;
+}
+
+/**
  * Yangi do'kon qo'shish (boss).
+ * Serial sequence bazadan orqada qolganda avtomatik id takrorlanib P2002 beradi;
+ * shuning uchun id ni MAX(id)+1 qilib beramiz va sequence ni yangilaymiz.
  */
 async function createShop(name) {
-  const shop = await prisma.shop.create({
-    data: {
-      name: (name || '').trim() || "Do'kon",
-      phone: null,
-      location: null,
-      latitude: null,
-      longitude: null,
-    },
-  });
-  const defaults = [
-    ['shop_name', name || shop.name],
+  const trimmed = (name || '').trim() || "Do'kon";
+  const defaultsTemplate = (shop) => [
+    ['shop_name', trimmed],
     ['phone', ''],
     ['address', ''],
     ['dollar_kurs', '12800'],
     ['report_daily_time', '21:00'],
     ['report_weekly_day', '5'],
   ];
-  for (const [k, v] of defaults) {
-    await setSetting(k, v, shop.id);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const maxRow = await prisma.shop.aggregate({ _max: { id: true } });
+    const nextId = (maxRow._max.id ?? 0) + 1;
+    try {
+      const shop = await prisma.shop.create({
+        data: {
+          id: nextId,
+          name: trimmed,
+          phone: null,
+          location: null,
+          latitude: null,
+          longitude: null,
+        },
+      });
+      try {
+        await setShopSequenceAfterId(nextId);
+      } catch {
+        // sequence nomi topilmasa ham yozuv yaratilgan
+      }
+      const defaults = defaultsTemplate(shop);
+      for (const [k, v] of defaults) {
+        await setSetting(k, v, shop.id);
+      }
+      return shop;
+    } catch (e) {
+      if (e?.code === 'P2002' && attempt < 4) continue;
+      throw e;
+    }
   }
-  return shop;
+  throw new Error("createShop: takroriy urinishlar yetarli emas");
 }
 
 /**

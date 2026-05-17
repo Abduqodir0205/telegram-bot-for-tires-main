@@ -2866,6 +2866,7 @@ async function saveChiqim(ctx) {
     balon_turi,
     sotildi,
     umumiy,
+    telegramUserId: ctx.from?.id,
     rabochiy_soni: rabochiy_soni || 0,
     rabochiy_narx: rabochiy_narx || 0,
     rabochiy_razmer,

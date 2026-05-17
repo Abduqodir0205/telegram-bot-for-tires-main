@@ -4,12 +4,80 @@
  * Barcha operatsiyalar Prisma tranzaksiyasi orqali.
  */
 const { prisma } = require('../utils/database');
-const logger = require('../utils/logger');
 const inventoryService = require('./inventoryService');
+
+const DEFAULT_SHOP_ID = 1;
+/** Birinchi ADMIN_IDS — shopService bilan bir xil (boss). */
+const BOSS_ADMIN_TELEGRAM_ID = Number(process.env.ADMIN_IDS?.split(',')[0]) || 222592599;
+
+function isBossTelegram(telegramUserId) {
+  return Number(telegramUserId) === BOSS_ADMIN_TELEGRAM_ID;
+}
+
+async function upsertAdminByTelegram(telegramIdBigInt, shopId) {
+  return prisma.admin.upsert({
+    where: { telegramId: telegramIdBigInt },
+    create: { telegramId: telegramIdBigInt, shopId },
+    update: {},
+  });
+}
+
+/**
+ * sales.admin_id uchun: admins jadvalidan yoki shop_admins / boss asosida avtomatik yaratish.
+ * Botda ko'pincha faqat shop_admins bor, admins bo'sh bo'lishi mumkin.
+ */
+async function resolveAdminIdForSale(shopId, telegramUserId) {
+  const sid = shopId ?? DEFAULT_SHOP_ID;
+
+  if (telegramUserId != null) {
+    const byTelegram = await prisma.admin.findUnique({
+      where: { telegramId: BigInt(telegramUserId) },
+    });
+    if (byTelegram) return byTelegram.id;
+  }
+
+  const inShop = await prisma.admin.findFirst({
+    where: { shopId: sid },
+    orderBy: { id: 'asc' },
+  });
+  if (inShop) return inShop.id;
+
+  const any = await prisma.admin.findFirst({ orderBy: { id: 'asc' } });
+  if (any) return any.id;
+
+  /** shop_admins yoki boss — admins qatorini yaratamiz (sales.admin_id FK). */
+  if (telegramUserId != null) {
+    const sa = await prisma.shopAdmin.findUnique({
+      where: {
+        telegramId_shopId: {
+          telegramId: BigInt(telegramUserId),
+          shopId: sid,
+        },
+      },
+    });
+    if (sa || isBossTelegram(telegramUserId)) {
+      const row = await upsertAdminByTelegram(BigInt(telegramUserId), sid);
+      return row.id;
+    }
+  }
+
+  const firstShopAdmin = await prisma.shopAdmin.findFirst({
+    where: { shopId: sid },
+    orderBy: { telegramId: 'asc' },
+  });
+  if (firstShopAdmin) {
+    const row = await upsertAdminByTelegram(firstShopAdmin.telegramId, sid);
+    return row.id;
+  }
+
+  throw new Error(
+    "Sotuvni saqlab bo'lmadi: admins va shop_admins bo'sh. Do'kon uchun admin (Telegram) qo'shing."
+  );
+}
 
 /**
  * Chiqim yozuvi + ixtiyoriy rabochiy balonlar omborga qo'shish + sync olinish_kerak.
- * @param {Object} data - razmer, balon_turi, sotildi, umumiy, rabochiy_soni?, rabochiy_narx?, rabochiy_razmer?, rabochiy_balon_turi?, rabochiy_holat?
+ * @param {Object} data - razmer, balon_turi, sotildi, umumiy, telegramUserId?, rabochiy_soni?, rabochiy_narx?, rabochiy_razmer?, rabochiy_balon_turi?, rabochiy_holat?
  * @param {number} shopId
  * @returns {{ naqdFoyda, zaxiraFoyda, foyda, rabIds }}
  */
@@ -19,12 +87,33 @@ async function saveChiqim(data, shopId = 1) {
     balon_turi,
     sotildi,
     umumiy,
+    telegramUserId,
     rabochiy_soni = 0,
     rabochiy_narx = 0,
     rabochiy_razmer,
     rabochiy_balon_turi,
     rabochiy_holat = 'yaxshi',
   } = data;
+
+  const sid = shopId ?? DEFAULT_SHOP_ID;
+  const qty = Math.round(Number(sotildi));
+  const total = Number(umumiy);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    throw new Error("Sotilgan son noto'g'ri.");
+  }
+  if (!Number.isFinite(total) || total < 0) {
+    throw new Error("Umumiy summa noto'g'ri.");
+  }
+
+  const tire = await prisma.kirim.findFirst({
+    where: { size: razmer, brand: balon_turi, shopId: sid },
+    select: { id: true },
+  });
+  if (!tire) {
+    throw new Error(`Kirim topilmadi: ${razmer} | ${balon_turi}. Avval kirim qiling.`);
+  }
+
+  const adminId = await resolveAdminIdForSale(sid, telegramUserId);
 
   const rabochiySumma = rabochiy_soni * rabochiy_narx;
   const naqdTushum = umumiy - rabochiySumma;
@@ -38,16 +127,23 @@ async function saveChiqim(data, shopId = 1) {
   await prisma.$transaction(async (tx) => {
     await tx.chiqim.create({
       data: {
-        razmer,
-        balonTuri: balon_turi,
-        sotildi,
-        umumiyQiymat: umumiy,
-        foyda,
-        naqdFoyda,
-        zaxiraFoyda,
-        rabochiyOlindi: rabochiy_soni,
-        rabochiyNarxi: rabochiy_narx,
-        shopId,
+        itemType: 'NEW',
+        tireId: tire.id,
+        quantity: qty,
+        totalPrice: total,
+        adminId,
+        shopId: sid,
+      },
+    });
+
+    await tx.warehouseLog.create({
+      data: {
+        itemType: 'NEW',
+        tireId: tire.id,
+        usedTireId: null,
+        logType: 'OUT',
+        quantity: qty,
+        price: total,
       },
     });
 
@@ -60,7 +156,7 @@ async function saveChiqim(data, shopId = 1) {
             soni: 1,
             narx: rabochiy_narx,
             holat: rabochiy_holat,
-            shopId,
+            shopId: sid,
           },
         });
         rabIds.push(r.id);
@@ -115,7 +211,6 @@ async function saveRabochiySotuv(rows, totalSotilganSumma, shopId = 1) {
 /**
  * Chiqim yozuvlari sana oralig'ida.
  */
-const DEFAULT_SHOP_ID = 1;
 
 /** YYYY-MM-DD yoki Date — mahalliy kalendar kuni (Prisma DateTime `gte`/`lte` uchun to'liq Date). */
 function parseCalendarDate(input) {
